@@ -35,7 +35,7 @@ MODELS = OrderedDict([
     for module in [bb, dd, dpd, gp, nich]
 ])
 
-MODEL_RANK = {name: i for i, name in enumerate(MODELS.iterkeys())}
+MODEL_RANK = {name: i for i, name in enumerate(MODELS.keys())}
 
 MODEL_TO_DATATYPE = {
     'bb': 'booleans',

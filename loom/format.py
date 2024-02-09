@@ -29,7 +29,6 @@
 import os
 import shutil
 from itertools import cycle
-from itertools import izip
 from contextlib2 import ExitStack
 from collections import defaultdict
 import parsable
@@ -90,7 +89,7 @@ def make_schema_row(schema_in, schema_row_out):
         raise LoomError('Schema is empty: {}'.format(schema_in))
     value = loom.schema_pb2.ProductValue()
     value.observed.sparsity = loom.schema_pb2.ProductValue.Observed.DENSE
-    for model in schema.itervalues():
+    for model in schema.values():
         try:
             field = loom.schema.MODEL_TO_DATATYPE[model]
         except KeyError:
@@ -130,16 +129,17 @@ class CategoricalEncoderBuilder(object):
         self.counts[value] += 1
 
     def __iadd__(self, other):
-        for key, value in other.counts.iteritems():
+        for key, value in other.counts.items():
             self.counts[key] += value
 
     def build(self):
-        sorted_keys = [(-count, key) for key, count in self.counts.iteritems()]
+        sorted_keys = [(-count, key) for key, count in self.counts.items()]
         sorted_keys.sort()
         symbols = {key: i for i, (_, key) in enumerate(sorted_keys)}
         if self.model == 'dpd':
-            assert 'OTHER_DECODE not in symbols', \
-                   'data cannot assume reserved value {}'.format(OTHER_DECODE)
+            assert (
+                  'OTHER_DECODE not in symbols'
+              ), 'data cannot assume reserved value {}'.format(OTHER_DECODE)
             symbols[OTHER_DECODE] = dpd.OTHER
         return {
             'name': self.name,
@@ -150,7 +150,7 @@ class CategoricalEncoderBuilder(object):
     def __getstate__(self):
         return (self.name, self.model, dict(self.counts))
 
-    def __setstate__(self, (name, model, counts)):
+    def __setstate__(self, name, model, counts):
         self.name = name
         self.model = model
         self.counts = defaultdict(lambda: 0)
@@ -172,7 +172,7 @@ class CategoricalFakeEncoderBuilder(object):
         self.max_value = max(self.max_value, int(value))
 
     def build(self):
-        symbols = {int(value): value for value in xrange(self.max_value + 1)}
+        symbols = {int(value): value for value in range(self.max_value + 1)}
         if self.model == 'dpd':
             symbols[OTHER_DECODE] = dpd.OTHER
         return {
@@ -201,7 +201,7 @@ def load_encoder(encoder):
 def load_decoder(encoder):
     model = encoder['model']
     if 'symbols' in encoder:
-        decoder = {value: key for key, value in encoder['symbols'].iteritems()}
+        decoder = {value: key for key, value in encoder['symbols'].items()}
         decode = decoder.__getitem__
     elif model == 'bb':
         decode = ('0', '1').__getitem__
@@ -210,18 +210,19 @@ def load_decoder(encoder):
     return decode
 
 
-def _make_encoder_builders_file((schema_in, rows_in)):
+def _make_encoder_builders_file(schema_in, rows_in):
     assert os.path.isfile(rows_in)
     schema = json_load(schema_in)
     with csv_reader(rows_in) as reader:
-        header = reader.next()
+        header = next(reader)
         builders = []
         seen = set()
         for name in header:
             if name in schema:
                 if name in seen:
-                    raise LoomError('Repeated column {} in csv file {}'.format(
-                        name, rows_in))
+                    raise LoomError(
+                        'Repeated column {} in csv file {}'.format(name, rows_in)
+                    )
                 seen.add(name)
                 model = schema[name]
                 Builder = ENCODER_BUILDERS[model]
@@ -231,14 +232,17 @@ def _make_encoder_builders_file((schema_in, rows_in)):
             builders.append(builder)
         if all(builder is None for builder in builders):
             raise LoomError(
-                'Csv file has no known features;'
-                ', try adding a header to {}'.format(rows_in))
+                'Csv file has no known features;, try adding a header to {}'.format(
+                    rows_in
+                )
+            )
         missing_features = sorted(set(schema) - seen)
         if missing_features:
-            raise LoomError('\n  '.join(
-                ['Csv file is missing features:'] + missing_features))
+            raise LoomError(
+                '\n  '.join(['Csv file is missing features:'] + missing_features)
+            )
         for row in reader:
-            for value, builder in izip(row, builders):
+            for value, builder in zip(row, builders):
                 if builder is not None:
                     value = value.strip()
                     if value:
@@ -249,14 +253,14 @@ def _make_encoder_builders_file((schema_in, rows_in)):
 def _make_encoder_builders_dir(schema_in, rows_in):
     assert os.path.isdir(rows_in)
     files_in = [os.path.join(rows_in, f) for f in os.listdir(rows_in)]
-    partial_builders = loom.util.parallel_map(_make_encoder_builders_file, [
-        (schema_in, file_in)
-        for file_in in files_in
-    ])
+    partial_builders = loom.util.parallel_map(
+        _make_encoder_builders_file,
+        [(schema_in, file_in) for file_in in files_in],
+    )
     builders = partial_builders[0]
     for other_builders in partial_builders[1:]:
         assert len(builders) == len(other_builders)
-        for builder, other in izip(builders, other_builders):
+        for builder, other in zip(builders, other_builders):
             assert builder.name == other.name
             builder += other
     return builders
@@ -282,7 +286,7 @@ def make_encoding(schema_in, rows_in, encoding_out):
     if os.path.isdir(rows_in):
         builders = _make_encoder_builders_dir(schema_in, rows_in)
     else:
-        builders = _make_encoder_builders_file((schema_in, rows_in))
+        builders = _make_encoder_builders_file(schema_in, rows_in)
     encoders = [builder.build() for builder in builders]
     encoders.sort(key=get_encoder_rank)
     json_dump(encoders, encoding_out)
@@ -290,7 +294,7 @@ def make_encoding(schema_in, rows_in, encoding_out):
 
 def ensure_fake_encoders_are_sorted(encoders):
     dds = [e['symbols'] for e in encoders if e['model'] == 'dd']
-    for smaller, larger in izip(dds, dds[1:]):
+    for smaller, larger in zip(dds, dds[1:]):
         if len(smaller) > len(larger):
             larger.update(smaller)
 
@@ -310,9 +314,9 @@ def make_schema(model_in, schema_out):
     schema = {}
     for kind in cross_cat.kinds:
         featureid = iter(kind.featureids)
-        for model in loom.schema.MODELS.iterkeys():
+        for model in loom.schema.MODELS.keys():
             for shared in getattr(kind.product_model, model):
-                feature_name = '{:06d}'.format(featureid.next())
+                feature_name = '{:06d}'.format(next(featureid))
                 schema[feature_name] = model
     json_dump(schema, schema_out)
     return schema
@@ -329,7 +333,7 @@ def make_fake_encoding(schema_in, model_in, encoding_out):
     fields = []
     builders = []
     name_to_builder = {}
-    for name, model in sorted(schema.iteritems()):
+    for name, model in sorted(schema.items()):
         fields.append(loom.schema.MODEL_TO_DATATYPE[model])
         Builder = FAKE_ENCODER_BUILDERS[model]
         builder = Builder(name, model)
@@ -341,16 +345,16 @@ def make_fake_encoding(schema_in, model_in, encoding_out):
         cross_cat.ParseFromString(f.read())
     for kind in cross_cat.kinds:
         featureid = iter(kind.featureids)
-        for model in loom.schema.MODELS.iterkeys():
+        for model in loom.schema.MODELS.keys():
             for shared in getattr(kind.product_model, model):
-                feature_name = '{:06d}'.format(featureid.next())
+                feature_name = '{:06d}'.format(next(featureid))
                 assert feature_name in schema
                 if model == 'dd':
                     for i in range(len(shared.alphas)):
-                        name_to_builder[feature_name].add_value(str(i))
+                      name_to_builder[feature_name].add_value(str(i))
                 elif model == 'dpd':
                     for val in shared.values:
-                        name_to_builder[feature_name].add_value(str(val))
+                      name_to_builder[feature_name].add_value(str(val))
     encoders = [b.build() for b in builders]
     ensure_fake_encoders_are_sorted(encoders)
     json_dump(encoders, encoding_out)
@@ -393,14 +397,14 @@ def _import_rows(import_file, rows_csv_in, file_out, misc):
     if os.path.isdir(rows_csv_in):
         _import_dir(import_file, args)
     else:
-        import_file(args)
+        import_file(*args)
 
 
-def _import_rowids_file(args):
+def _import_rowids_file(*args):
     rows_csv_in, rowids_out, id_offset, id_stride, id_field = args
     assert os.path.isfile(rows_csv_in)
     with csv_reader(rows_csv_in) as reader:
-        header = reader.next()
+        header = next(reader)
         if id_field is None:
             basename = os.path.basename(rows_csv_in)
             get_rowid = lambda i, row: '{}:{}'.format(basename, i)
@@ -425,7 +429,7 @@ def import_rowids(rows_csv_in, rowids_out, id_field=None):
     _import_rows(_import_rowids_file, rows_csv_in, rowids_out, id_field)
 
 
-def _import_rows_file(args):
+def _import_rows_file(*args):
     rows_csv_in, rows_out, id_offset, id_stride, encoding_in = args
     assert os.path.isfile(rows_csv_in)
     encoders = json_load(encoding_in)
@@ -436,15 +440,17 @@ def _import_rows_file(args):
         'reals': message.add_reals,
     }
     with csv_reader(rows_csv_in) as reader:
-        feature_names = list(reader.next())
+        feature_names = list(next(reader))
         header_length = len(feature_names)
         name_to_pos = {name: i for i, name in enumerate(feature_names)}
         schema = []
         for encoder in encoders:
             pos = name_to_pos.get(encoder['name'])
-            add = add_field[loom.schema.MODEL_TO_DATATYPE[encoder['model']]]
+            dt = loom.schema.MODEL_TO_DATATYPE[encoder['model']]
+            is_dict = 'symbols' in encoder or encoder['model'] == 'bb'
+            add = add_field[dt]
             encode = load_encoder(encoder)
-            schema.append((pos, add, encode))
+            schema.append((pos, add, encode, dt, is_dict))
 
         def rows():
             for i, row in enumerate(reader):
@@ -452,16 +458,18 @@ def _import_rows_file(args):
                     raise LoomError('row {} has wrong length {}:\n{}'.format(
                         i, len(row), row))
                 message.id = id_offset + id_stride * i
-                for pos, add, encode in schema:
+                for pos, add, encode, dt, is_dict in schema:
                     value = None if pos is None else row[pos].strip()
                     observed = bool(value)
                     message.add_observed(observed)
                     if observed:
+                        if (not is_dict) and (dt == 'counts'):
+                            value = int(float(value))
                         add(encode(value))
                 yield message
                 message.Clear()
 
-        loom.cFormat.row_stream_dump(rows(), rows_out)
+        loom.cFormat.row_stream_dump(rows(), rows_out.encode('utf-8'))
 
 
 @parsable.command
@@ -491,12 +499,13 @@ def export_rows(encoding_in, rows_in, rows_csv_out, chunk_size=1000000):
         raise LoomError('Cannot export_rows to working directory')
     for ext in ['.csv', '.gz', '.bz2']:
         if rows_csv_out.endswith(ext):
-            raise LoomError(
-                'Expected rows_csv_out to be a dirname, actual'.format(
-                    rows_csv_out))
+          raise LoomError(
+              'Expected rows_csv_out to be a dirname, actual'.format(rows_csv_out)
+          )
     if not (chunk_size > 0):
-        raise LoomError('Invalid chunk_size {}, must be positive'.format(
-            chunk_size))
+        raise LoomError(
+            'Invalid chunk_size {}, must be positive'.format(chunk_size)
+        )
     encoders = json_load(encoding_in)
     fields = [loom.schema.MODEL_TO_DATATYPE[e['model']] for e in encoders]
     decoders = [load_decoder(e) for e in encoders]
@@ -505,23 +514,24 @@ def export_rows(encoding_in, rows_in, rows_csv_out, chunk_size=1000000):
         shutil.rmtree(rows_csv_out)
     os.makedirs(rows_csv_out)
     row_count = sum(1 for _ in protobuf_stream_load(rows_in))
-    rows = loom.cFormat.row_stream_load(rows_in)
-    chunk_count = (row_count + chunk_size - 1) / chunk_size
+    rb = rows_in.encode('utf-8')
+    rows = loom.cFormat.row_stream_load(rb)
+    chunk_count = (row_count + chunk_size - 1) // chunk_size
     chunks = sorted(
         os.path.join(rows_csv_out, 'rows.{}.csv.gz'.format(i))
-        for i in xrange(chunk_count)
+        for i in range(chunk_count)
     )
     with ExitStack() as stack:
         with_ = stack.enter_context
         writers = [with_(csv_writer(f)) for f in chunks]
         for writer in writers:
             writer.writerow(header)
-        for row, writer in izip(rows, cycle(writers)):
+        for row, writer in zip(rows, cycle(writers)):
             data = row.iter_data()
-            schema = izip(data['observed'], fields, decoders)
+            schema = zip(data['observed'], fields, decoders)
             csv_row = [row.id]
             for observed, field, decode in schema:
-                csv_row.append(decode(data[field].next()) if observed else '')
+                csv_row.append(decode(next(data[field])) if observed else '')
             writer.writerow(csv_row)
 
 

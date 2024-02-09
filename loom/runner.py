@@ -60,7 +60,7 @@ def popen_piped(command, debug, profile):
     profile = str(profile).lower()
     bin_pattern = 'loom_{}_debug' if debug else 'loom_{}'
     bin_ = [which(bin_pattern.format(command[0]))]
-    args = map(str, command[1:])
+    args = list(map(str, command[1:]))
     command = PROFILERS[profile] + bin_ + args
     return subprocess.Popen(
         command,
@@ -76,14 +76,15 @@ def check_call(command, debug, profile, **kwargs):
     else:
         bin_pattern = 'loom_{}_debug' if debug else 'loom_{}'
         bin_ = [which(bin_pattern.format(command[0]))]
-    args = map(str, command[1:])
+    args = list(map(str, command[1:]))
     command = PROFILERS[profile] + bin_ + args
+    command = [c.decode() if isinstance(c, bytes) else c for c in command]
     if profile != 'none':
         retcode = subprocess.Popen(command, **kwargs).wait()
-        print 'Program returned {}'.format(retcode)
+        print('Program returned {}'.format(retcode))
     else:
         if debug:
-            print ' \\\n  '.join(command)
+            print(' \\\n  '.join(command))
         subprocess.check_call(command, **kwargs)
 
 
@@ -125,8 +126,8 @@ def profilers():
     '''
     Print available profilers.
     '''
-    for key, value in sorted(PROFILERS.iteritems()):
-        print '  {} = {}'.format(key, ' '.join(value))
+    for key, value in sorted(PROFILERS.items()):
+      print('  {} = {}'.format(key, ' '.join(value)))
 
 
 @parsable.command

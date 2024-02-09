@@ -27,7 +27,6 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
-from itertools import izip
 import numpy
 import numpy.random
 from distributions.io.stream import (
@@ -72,11 +71,11 @@ def crossvalidate_one(
     numpy.random.shuffle(split)
     diffs_in = protobuf_stream_load(inputs['ingest']['diffs'])
     protobuf_stream_dump(
-        (row for s, row in izip(split, diffs_in) if s),
+        (row for s, row in zip(split, diffs_in) if s), 
         results['train'])
     rows_in = protobuf_stream_load(inputs['ingest']['rows'])
     protobuf_stream_dump(
-        (row for s, row in izip(split, rows_in) if not s),
+        (row for s, row in zip(split, rows_in) if not s), 
         results['test'])
 
     LOG(' shuffle')
@@ -136,7 +135,7 @@ def crossvalidate(
     assert 1 <= train_count and 1 <= test_count
 
     mean_scores = []
-    for seed in xrange(sample_count):
+    for seed in range(sample_count):
         results = loom.store.get_paths(
             os.path.join(name, 'crossvalidate/{}'.format(seed)))
         mean = crossvalidate_one(
@@ -152,9 +151,9 @@ def crossvalidate(
     results = loom.store.get_paths(os.path.join(name, 'crossvalidate'))
     results['scores'] = os.path.join(results['root'], 'scores.json.gz')
     json_dump(mean_scores, results['scores'])
-    print 'score = {} +- {}'.format(
-        numpy.mean(mean_scores),
-        numpy.std(mean_scores))
+    print(
+        'score = {} +- {}'.format(numpy.mean(mean_scores), numpy.std(mean_scores))
+    )
 
 
 if __name__ == '__main__':

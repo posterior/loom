@@ -54,8 +54,8 @@ def sample_grid(grid):
         return random_choice(grid)
     elif isinstance(grid, dict):
         return {
-            key: sample_grid(value)
-            for key, value in grid.iteritems()
+            key: sample_grid(value) 
+            for key, value in grid.items()
         }
     else:
         raise ValueError('cannot sample from grid: {}'.format(grid))
@@ -67,7 +67,7 @@ def generate_kinds(feature_count):
     [o|oo|oooo|oooooooo|oooooooooooooooo|oooooooooooooooooooooooooooooooo]
     '''
     featureid_to_kindid = []
-    for i in xrange(feature_count):
+    for i in range(feature_count):
         featureid_to_kindid.extend([i] * (2 ** i))
         if len(featureid_to_kindid) >= feature_count:
             break
@@ -86,7 +86,7 @@ def generate_features(feature_count, feature_type='mixed'):
         module = loom.schema.MODELS[feature_type]
         for example in module.EXAMPLES:
             features.append(module.Shared.from_dict(example['shared']))
-    features *= (feature_count + len(features) - 1) / len(features)
+    features *= (feature_count + len(features) - 1) // len(features)
     numpy.random.shuffle(features)
     features = features[:feature_count]
     assert len(features) == feature_count
@@ -109,7 +109,7 @@ def import_features(encoders):
         elif feature_type == 'dd':
             grid = loom.hyperprior.DEFAULTS[feature_type]['alpha']
             dim = len(encoder['symbols'])
-            raw = {'alphas': [sample_grid(grid) for _ in xrange(dim)]}
+            raw = {'alphas': [sample_grid(grid) for _ in range(dim)]}
         else:
             raise ValueError('unknown model: {}'.format(feature_type))
         feature.load(raw)
@@ -121,7 +121,7 @@ def generate_model(features):
     featureid_to_kindid = generate_kinds(len(features))
     kind_count = 1 + max(featureid_to_kindid)
     cross_cat = loom.schema_pb2.CrossCat()
-    kinds = [cross_cat.kinds.add() for _ in xrange(kind_count)]
+    kinds = [cross_cat.kinds.add() for _ in range(kind_count)]
     for kind in kinds:
         CLUSTERING.protobuf_dump(kind.product_model.clustering)
     for featureid, feature in enumerate(features):

@@ -47,7 +47,7 @@ DEFAULTS = {
 }
 BUFFER_SIZE = 10
 
-Estimate = namedtuple('Estimate', ['mean', 'variance'], verbose=False)
+Estimate = namedtuple('Estimate', ['mean', 'variance'])
 
 
 def get_estimate(samples):
@@ -80,7 +80,6 @@ def data_row_to_protobuf(data_row, diff):
     fields = {
         bool: diff.pos.booleans,
         int: diff.pos.counts,
-        long: diff.pos.counts,
         float: diff.pos.reals,
     }
     for val in data_row:
@@ -96,19 +95,16 @@ def protobuf_to_data_row(diff):
     data = diff.pos
     packed = chain(data.booleans, data.counts, data.reals)
     return [
-        packed.next() if observed else None
+        next(packed) if observed else None
         for observed in data.observed.dense
     ]
 
 
 def load_data_rows(filename):
-    for row in loom.cFormat.row_stream_load(filename):
+    for row in loom.cFormat.row_stream_load(filename.encode('utf-8')):
         data = row.iter_data()
         packed = chain(data['booleans'], data['counts'], data['reals'])
-        yield [
-            packed.next() if observed else None
-            for observed in data['observed']
-        ]
+        yield [next(packed) if observed else None for observed in data['observed']]
 
 
 def feature_set_to_protobuf(feature_set, messages):
@@ -188,7 +184,7 @@ class QueryServer(object):
                 buffered += 1
             else:
                 yield self._receive_score()
-        for _ in xrange(buffered):
+        for _ in range(buffered):
             yield self._receive_score()
 
     def _entropy(
@@ -223,7 +219,7 @@ class QueryServer(object):
         means = iter(means)
         variances = iter(variances)
         return {
-            row_set | col_set: Estimate(means.next(), variances.next())
+            row_set | col_set: Estimate(next(means), next(variances))
             for row_set in row_sets
             for col_set in col_sets
         }
@@ -238,12 +234,12 @@ class QueryServer(object):
         if tile_size is None:
             tile_size = DEFAULTS['tile_size']
         min_size = max(1, min(tile_size, len(row_sets), len(col_sets)))
-        tile_size = tile_size * tile_size / min_size
+        tile_size = tile_size * tile_size // min_size
         assert tile_size > 0, tile_size
         result = {}
-        for i in xrange(0, len(row_sets), tile_size):
+        for i in range(0, len(row_sets), tile_size):
             row_tile = row_sets[i: i + tile_size]
-            for j in xrange(0, len(col_sets), tile_size):
+            for j in range(0, len(col_sets), tile_size):
                 col_tile = col_sets[j: j + tile_size]
                 result.update(self._entropy(
                     row_tile,
@@ -274,16 +270,17 @@ class QueryServer(object):
 
         if entropys is None:
             entropys = self.entropy(
-                [feature_set1],
-                [feature_set2],
-                conditioning_row,
-                sample_count)
-        mi = entropys[feature_set1].mean \
-            + entropys[feature_set2].mean \
+                [feature_set1], [feature_set2], conditioning_row, sample_count)
+        mi = (
+            entropys[feature_set1].mean
+            + entropys[feature_set2].mean
             - entropys[feature_union].mean
-        variance = entropys[feature_set1].variance \
-            + entropys[feature_set2].variance \
+        )
+        variance = (
+            entropys[feature_set1].variance
+            + entropys[feature_set2].variance
             + entropys[feature_union].variance
+        )
         return Estimate(mi, variance)
 
     def score_derivative(

@@ -28,13 +28,12 @@
 
 from copy import copy
 import csv
+from io import StringIO
 import math
 from contextlib import contextmanager
-from itertools import izip
 from collections import Counter
 from distributions.io.stream import json_load
 from distributions.io.stream import open_compressed
-from StringIO import StringIO
 import numpy
 from sklearn.cluster import SpectralClustering
 from loom.format import load_decoder
@@ -71,7 +70,7 @@ def csv_input(arg):
     if hasattr(arg, 'read'):
         yield csv.reader(arg)
     else:
-        with open_compressed(arg, 'rb') as infile:
+        with open_compressed(arg, 'rt') as infile:
             yield csv.reader(infile)
 
 
@@ -202,7 +201,7 @@ class PreQL(object):
         if len(sets) != len(feature_sets):
             raise ValueError('duplicate sets in feature sets: {}'.format(sets))
         sum_len = sum(len(s) for s in feature_sets)
-        len_sum = len(frozenset.union(*feature_sets))
+        len_sum = len(frozenset.union(*list(feature_sets)))
         if sum_len != len_sum:
             raise ValueError('feature sets are not disjoint: {}'.format(sets))
 
@@ -318,7 +317,7 @@ class PreQL(object):
                 return writer.result()
 
     def _predict(self, reader, count, writer, id_offset):
-        header = reader.next()
+        header = next(reader)
         if id_offset and header[0] in self._feature_names:
             raise ValueError('id field conflict: {}'.format(header[0]))
         writer.writerow(header)
@@ -426,19 +425,20 @@ class PreQL(object):
             f2,0.8,1.,0.8
         '''
         conditioning_row = self.encode_row(conditioning_row)
-        fc_zip = zip(self._feature_names, conditioning_row)
+        fc_zip = tuple(zip(self._feature_names, conditioning_row))
         if target_feature_sets is None:
             target_feature_sets = [[f] for f, c in fc_zip if c is None]
         if query_feature_sets is None:
-            query_feature_sets = [[f] for f, c in fc_zip if c is None]
-        target_feature_sets = map(self.encode_set, target_feature_sets)
-        query_feature_sets = map(self.encode_set, query_feature_sets)
-        unobserved_features = frozenset.union(*target_feature_sets) | \
-            frozenset.union(*query_feature_sets)
+          query_feature_sets = [[f] for f, c in fc_zip if c is None]
+        target_feature_sets = tuple(map(self.encode_set, target_feature_sets))
+        query_feature_sets = tuple(map(self.encode_set, query_feature_sets))
+        unobserved_features = frozenset.union(
+            *(target_feature_sets + query_feature_sets)
+        )
         mismatches = []
         for feature, condition in fc_zip:
-            if feature in unobserved_features and condition is not None:
-                mismatches.append(feature)
+          if feature in unobserved_features and condition is not None:
+            mismatches.append(feature)
         if mismatches:
             raise ValueError(
                 'features {} must be None in conditioning row {}'.format(
@@ -514,12 +514,13 @@ class PreQL(object):
             target_feature_sets = [[f] for f, c in fc_zip if c is not None]
         if observed_feature_sets is None:
             observed_feature_sets = [[f] for f, c in fc_zip if c is not None]
-        target_feature_sets = map(self.encode_set, target_feature_sets)
-        observed_feature_sets = map(self.encode_set, observed_feature_sets)
+        target_feature_sets = tuple(map(self.encode_set, target_feature_sets))
+        observed_feature_sets = tuple(map(self.encode_set, observed_feature_sets))
         self._validate_feature_sets(target_feature_sets)
         self._validate_feature_sets(observed_feature_sets)
-        observed_features = frozenset.union(*target_feature_sets) | \
-            frozenset.union(*observed_feature_sets)
+        observed_features = frozenset.union(*target_feature_sets) | frozenset.union(
+            *observed_feature_sets
+        )
         mismatches = []
         for feature, condition in fc_zip:
             if feature in observed_features and condition is None:
@@ -561,8 +562,8 @@ class PreQL(object):
                     raise ValueError('target features and query features'
                                      ' must be disjoint or equal:'
                                      ' {} {}'.format(tfs, qfs))
-        target_sets = map(self._cols_to_mask, target_feature_sets)
-        query_sets = map(self._cols_to_mask, query_feature_sets)
+        target_sets = tuple(map(self._cols_to_mask, target_feature_sets))
+        query_sets = tuple(map(self._cols_to_mask, query_feature_sets))
         target_labels = map(min, target_feature_sets)
         query_labels = map(min, query_feature_sets)
         entropys = self._query_server.entropy(
@@ -570,8 +571,8 @@ class PreQL(object):
             col_sets=query_sets,
             conditioning_row=conditioning_row,
             sample_count=sample_count)
-        writer.writerow([None] + query_labels)
-        for target_label, target_set in izip(target_labels, target_sets):
+        writer.writerow([None] + list(query_labels))
+        for target_label, target_set in zip(target_labels, target_sets):
             result_row = [target_label]
             for query_set in query_sets:
                 if target_set == query_set:

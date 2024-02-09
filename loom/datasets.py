@@ -26,6 +26,7 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import itertools
 import os
 from distributions.io.stream import json_dump
 from distributions.io.stream import json_load
@@ -48,7 +49,7 @@ parsable = parsable.Parsable()
 
 
 LOOM_TEST_COST = int(os.environ.get('LOOM_TEST_COST', 100))
-FEATURE_TYPES = loom.schema.MODELS.keys()
+FEATURE_TYPES = list(loom.schema.MODELS.keys())
 FEATURE_TYPES += ['mixed']
 COST = {
     'gp': 10,
@@ -60,11 +61,11 @@ LOOM_DEBUG_MIX = int(os.environ.get('LOOM_DEBUG_MIX', 0))
 
 
 def get_cell_count(config):
-    return config['row_count'] * config['feature_count'] * config['density']
+  return config['row_count'] * config['feature_count'] * config['density']
 
 
 def get_cost(config):
-    return get_cell_count(config) * COST.get(config['feature_type'], 1)
+  return get_cell_count(config) * COST.get(config['feature_type'], 1)
 
 
 CONFIG_VALUES = [
@@ -83,12 +84,12 @@ CONFIG_VALUES = [
 CONFIGS = {
     '{feature_type}-{row_count}-{feature_count}-{density}'.format(**c): c
     for c in CONFIG_VALUES
-    if get_cost(c) <= 10 ** 7
+    if get_cost(c) <= 10**7
 }
 
 TEST_CONFIGS = [
     name
-    for name, config in CONFIGS.iteritems()
+    for name, config in CONFIGS.items()
     if get_cell_count(config) < LOOM_TEST_COST
 ]
 TEST_CONFIGS.sort(key=lambda c: get_cost(CONFIGS[c]))
@@ -100,9 +101,11 @@ def init(sample_count=1, force=False, debug=False):
     Generate synthetic datasets for testing and benchmarking.
     '''
     configs = sorted(CONFIGS.keys(), key=(lambda c: -get_cost(CONFIGS[c])))
-    parallel_map(generate_one, [
-        (name, sample_count, force, debug) for name in configs
-    ])
+    list(
+        itertools.starmap(
+            generate_one, [(n, sample_count, force, debug, name) for n in configs]
+        )
+    )
 
 
 @parsable.command
@@ -112,12 +115,14 @@ def test(sample_count=2, force=True, debug=False):
     '''
     mkdir_p(loom.store.STORE)
     configs = sorted(TEST_CONFIGS, key=(lambda c: -get_cost(CONFIGS[c])))
-    parallel_map(generate_one, [
-        (name, sample_count, force, debug) for name in configs
-    ])
+    list(
+        itertools.starmap(
+            generate_one, [(name, sample_count, force, debug) for name in configs]
+        )
+    )
 
 
-def generate_one((name, sample_count, force, debug)):
+def generate_one(name, sample_count, force, debug):
     paths = loom.store.get_paths(name, sample_count=sample_count)
     leaves = loom.store.iter_paths(name, paths)
     if not force and all(os.path.exists(f) for _, f in leaves):
@@ -125,12 +130,12 @@ def generate_one((name, sample_count, force, debug)):
             version = f.read().strip()
         if version == loom.__version__:
             return
-    print 'generating', name
+    print('generating', name)
     mkdir_p(paths['root'])
     with open_compressed(paths['ingest']['version'], 'w') as f:
         f.write(loom.__version__)
     config = CONFIGS[name]
-    chunk_size = max(10, (config['row_count'] + 7) / 8)
+    chunk_size = max(10, (config['row_count'] + 7) // 8)
     loom.transforms.make_fake_transforms(
         transforms_out=paths['ingest']['transforms'])
     loom.generate.generate(

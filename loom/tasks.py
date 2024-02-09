@@ -191,11 +191,11 @@ def infer(
     if not (sample_count >= 1):
         raise LoomError('Too few samples: {}'.format(sample_count))
     parallel_map(_infer_one, [
-        (name, seed, config, debug) for seed in xrange(sample_count)
-    ])
+       (name, seed, config, debug) for seed in range(sample_count)]
+    )
 
 
-def _infer_one(args):
+def _infer_one(*args):
     infer_one(*args)
 
 
@@ -218,7 +218,7 @@ def infer_one(name, seed=0, config=None, debug=False):
     LOG('making config')
     if config is None:
         config = {}
-    elif isinstance(config, basestring):
+    elif isinstance(config, str):
         if not os.path.exists(config):
             raise LoomError('Missing config file: {}'.format(config))
         config = json_load(config)
@@ -270,7 +270,7 @@ def make_consensus(name, config=None, debug=False):
     LOG('making config')
     if config is None:
         config = {}
-    elif isinstance(config, basestring):
+    elif isinstance(config, str):
         if not os.path.exists(config):
             raise LoomError('Missing config file: {}'.format(config))
         config = json_load(config)

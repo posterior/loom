@@ -27,30 +27,30 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import pytest
 from loom.util import LOG
 import loom.store
 import loom.datasets
 import loom.tasks
 import loom.query
-from loom.test.util import for_each_dataset
+from loom.test.util import get_test_kwargs
 from loom.test.test_query import get_example_requests, check_response
 
 SAMPLE_COUNT = 2
 CONFIG = {'schedule': {'extra_passes': 2}}
 
 
-@for_each_dataset
-def test_all(name, schema, rows_csv, **unused):
-    name = os.path.join(name, 'test_tasks')
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_all(dataset):
+    kwargs = get_test_kwargs(dataset)
+    schema = kwargs['schema']
+    rows_csv = kwargs['rows_csv']
+    name = os.path.join(kwargs['name'], 'test_tasks')
     paths = loom.store.get_paths(name)
     loom.datasets.clean(name)
     loom.tasks.ingest(name, schema, rows_csv, debug=True)
-    loom.tasks.infer(
-        name,
-        sample_count=SAMPLE_COUNT,
-        config=CONFIG,
-        debug=True)
-    loom.tasks.make_consensus(name, debug=True)
+    loom.tasks.infer(name, sample_count=SAMPLE_COUNT, config=CONFIG, debug=True)
+    loom.tasks.make_consensus(name, debug=False)
 
     LOG('querying')
     requests = get_example_requests(

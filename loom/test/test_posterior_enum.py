@@ -28,7 +28,7 @@
 
 import os
 import sys
-from itertools import imap, product
+from itertools import product
 from nose import SkipTest
 from nose.tools import assert_true, assert_false, assert_equal
 import numpy
@@ -203,9 +203,9 @@ def infer_feature_hypers(max_size=CAT_MAX_SIZE, debug=False):
 
     hyper_prior = [
         (hp_name, (param_name, param_grid))
-        for hp_name, param_grids in HYPER_PRIOR.iteritems()
+        for hp_name, param_grids in HYPER_PRIOR.items()
         if hp_name not in ['topology', 'clustering']
-        for param_name, param_grid in param_grids.iteritems()
+        for param_name, param_grid in param_grids.items()
     ]
     datasets = filter(
         lambda x: x[1] == x[5][0],
@@ -303,7 +303,7 @@ def test_clustering_hyper_inference():
     infer_clustering_hypers(100)
 
 
-def _test_dataset(args):
+def _test_dataset(*args):
     dim, feature_type, density, infer_kinds, debug, hyper_prior = args
     object_count, feature_count = dim
     with tempdir(cleanup_on_error=(not debug)):
@@ -333,8 +333,8 @@ def _test_dataset(args):
             density)
         dump_rows(rows, rows_name)
 
-        infer_cats = (object_count > 1)
-        infer_hypers = (hyper_prior is not None)
+        infer_cats = object_count > 1
+        infer_hypers = hyper_prior is not None
 
         if infer_kinds:
             sample_count = 10 * LATENT_SIZES[object_count][feature_count]
@@ -385,15 +385,16 @@ def _test_dataset(args):
 
 
 def add_sample(sample, score, counts_dict, scores_dict):
-    if sample in counts_dict:
-        counts_dict[sample] += 1
-        scores_dict[sample] = score
-        expected = score
-        assert abs(score - expected) < SCORE_TOL, \
-            'inconsistent score: {} vs {}'.format(score, expected)
-    else:
-        counts_dict[sample] = 1
-        scores_dict[sample] = score
+  if sample in counts_dict:
+    counts_dict[sample] += 1
+    scores_dict[sample] = score
+    expected = score
+    assert (
+        abs(score - expected) < SCORE_TOL
+    ), 'inconsistent score: {} vs {}'.format(score, expected)
+  else:
+    counts_dict[sample] = 1
+    scores_dict[sample] = score
 
 
 def process_fixed_samples(fixed_hyper_samples, unfixed_latents):
@@ -449,7 +450,7 @@ def _test_dataset_config(
     if fixed_hyper_samples:
         latents, scores_dict = process_fixed_samples(
             fixed_hyper_samples,
-            scores_dict.keys())
+            list(scores_dict.keys()))
         useable_count = sum([counts_dict[lat] for lat in latents])
         if useable_count < sample_count:
             LOG('Warn', casename, 'scores found for {} / {} samples'.format(
@@ -457,9 +458,9 @@ def _test_dataset_config(
                 sample_count))
         sample_count = useable_count
     else:
-        latents = scores_dict.keys()
+        latents = list(scores_dict.keys())
     actual_latent_count = len(latents)
-    infer_kinds = (config['kernels']['kind']['iterations'] > 0)
+    infer_kinds = config['kernels']['kind']['iterations'] > 0
     if infer_kinds:
         expected_latent_count = count_crosscats(object_count, feature_count)
     else:
@@ -495,17 +496,13 @@ def _test_dataset_config(
         LOG('Pass', casename, comment)
         return None
     else:
-        print 'EXPECT\tACTUAL\tCHI\tVALUE'
+        print('EXPECT\tACTUAL\tCHI\tVALUE')
         lines = [(probs[i], counts[i], latents[i]) for i in highest]
         for prob, count, latent in sorted(lines, reverse=True):
             expect = prob * sample_count
             chi = (count - expect) * expect ** -0.5
             pretty = pretty_latent(latent)
-            print '{:0.1f}\t{}\t{:+0.1f}\t{}'.format(
-                expect,
-                count,
-                chi,
-                pretty)
+            print('{:0.1f}\t{}\t{:+0.1f}\t{}'.format(expect, count, chi, pretty))
         return LOG('Fail', casename, comment)
 
 
@@ -517,7 +514,7 @@ def generate_model(feature_count, feature_type, hyper_prior=None):
     kind = cross_cat.kinds.add()
     CLUSTERING.protobuf_dump(kind.product_model.clustering)
     features = getattr(kind.product_model, feature_type)
-    for featureid in xrange(feature_count):
+    for featureid in range(feature_count):
         shared.protobuf_dump(features.add())
         kind.featureids.append(featureid)
     CLUSTERING.protobuf_dump(cross_cat.topology)
@@ -592,7 +589,7 @@ def generate_rows(object_count, feature_count, feature_type, density):
     kind_count = len(set(feature_assignments))
     object_assignments = [
         CLUSTERING.sample_assignments(object_count)
-        for _ in xrange(kind_count)
+        for _ in range(kind_count)
     ]
     group_counts = [
         len(set(assignments))
@@ -610,9 +607,9 @@ def generate_rows(object_count, feature_count, feature_type, density):
         sampler.init(shared, group)
         return sampler
 
-    table = [[None] * feature_count for _ in xrange(object_count)]
+    table = [[None] * feature_count for _ in range(object_count)]
     for f, k in enumerate(feature_assignments):
-        samplers = [sampler_create() for _ in xrange(group_counts[k])]
+        samplers = [sampler_create() for _ in range(group_counts[k])]
         for i, g in enumerate(object_assignments[k]):
             if numpy.random.uniform() < density:
                 table[i][f] = samplers[g].eval(shared)
@@ -749,9 +746,9 @@ def parse_sample(message):
 def pretty_kind(kind):
     featureids, groups = kind
     return '{} |{}|'.format(
-        ' '.join(imap(str, sorted(featureids))),
+        ' '.join(map(str, sorted(featureids))),
         '|'.join(sorted(
-            ' '.join(imap(str, sorted(group)))
+            ' '.join(map(str, sorted(group)))
             for group in groups
         ))
     )
@@ -803,11 +800,9 @@ def datasets(max_count=1000000):
     enum_partitions
     max_rows = 16
     max_cols = 12
-    print '# Cross Cat Latent Space Sizes up to {}, generated by:'
-    print '# python {} datasets {}'.format(
-        os.path.basename(__file__),
-        max_count)
-    print 'LATENT_SIZES = ['
+    print('# Cross Cat Latent Space Sizes up to {}, generated by:')
+    print('# python {} datasets {}'.format(os.path.basename(__file__), max_count))
+    print('LATENT_SIZES = [')
     for rows in range(1 + max_rows):
         counts = []
         for cols in range(1 + max_cols):
@@ -816,8 +811,8 @@ def datasets(max_count=1000000):
                 break
             counts.append(count)
         if len(counts) > 1:
-            print '    [{}],'.format(', '.join(map(str, counts)))
-    print ']'
+            print('    [{}],'.format(', '.join(map(str, counts))))
+    print(']')
 
 
 def test_datasets():

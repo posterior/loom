@@ -104,10 +104,7 @@ def get_sample_path(root, seed):
 
 def join_paths(*args):
     args, paths = args[:-1], args[-1]
-    return {
-        key: os.path.join(*(args + (value,)))
-        for key, value in paths.iteritems()
-    }
+    return {key: os.path.join(*(args + (value,))) for key, value in paths.items()}
 
 
 def in_dir(paths, directory, fname):
@@ -116,7 +113,7 @@ def in_dir(paths, directory, fname):
 
 
 def get_paths(root, sample_count=1):
-    assert sample_count >= 0 or sample_count is None, sample_count
+    assert sample_count is None or sample_count >= 0, sample_count
     if sample_count is None:
         sample_count = len(os.listdir(os.path.join(root, 'samples')))
     if not os.path.isabs(root):
@@ -126,17 +123,17 @@ def get_paths(root, sample_count=1):
     paths['consensus'] = join_paths(root, 'consensus', BASENAMES['consensus'])
     paths['query'] = join_paths(root, 'query', BASENAMES['query'])
     paths['samples'] = []
-    for seed in xrange(sample_count):
+    for seed in range(sample_count):
         sample_root = get_sample_path(root, seed)
         paths['samples'].append(join_paths(sample_root, BASENAMES['sample']))
     return paths
 
 
 def iter_paths(name, paths):
-    if isinstance(paths, basestring):
+    if isinstance(paths, str):
         yield name, paths
     elif isinstance(paths, dict):
-        for key, value in paths.iteritems():
+        for key, value in paths.items():
             for pair in iter_paths('{}.{}'.format(name, key), value):
                 yield pair
     else:
@@ -174,11 +171,11 @@ def path_exists(paths, chain):
 
 def require(name, requirements):
     if name is None:
-        print 'try one of:'
+        print('try one of:')
         for name in sorted(os.listdir(STORE)):
             paths = get_paths(name)
             if all(path_exists(paths, r) for r in requirements):
-                print '  {}'.format(name)
+                print('  {}').format(name)
         sys.exit(1)
     else:
         paths = get_paths(name)

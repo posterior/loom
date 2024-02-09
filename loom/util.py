@@ -26,7 +26,9 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import itertools
 import os
+import pickle
 import sys
 import csv
 import shutil
@@ -34,7 +36,6 @@ import tempfile
 import traceback
 import contextlib
 import multiprocessing
-import cPickle as pickle
 import simplejson as json
 from google.protobuf.descriptor import FieldDescriptor
 from distributions.io.stream import open_compressed
@@ -140,11 +141,11 @@ def cp_ns(source, destin):
                 raise e
 
 
-def print_trace((fun, arg)):
+def print_trace(fun, args):
     try:
-        return fun(arg)
-    except Exception, e:
-        print e
+        return fun(*args)
+    except Exception as e:
+        print(e)
         traceback.print_exc()
         raise
 
@@ -152,26 +153,28 @@ def print_trace((fun, arg)):
 def parallel_map(fun, args):
     if not isinstance(args, list):
         args = list(args)
+    fun_args = [(fun, arg) for arg in args]
     is_daemon = multiprocessing.current_process().daemon
     if THREADS == 1 or len(args) < 2 or is_daemon:
         LOG('Running {} in this thread'.format(fun.__name__))
-        return map(fun, args)
+        return list(itertools.starmap(print_trace, fun_args))
     else:
         LOG('Running {} in {:d} threads'.format(fun.__name__, THREADS))
-        pool = multiprocessing.Pool(THREADS)
-        fun_args = [(fun, arg) for arg in args]
-        return pool.map(print_trace, fun_args, chunksize=1)
+        # FIXME: Multiprocessing hangs.
+        # pool = multiprocessing.Pool(THREADS)
+        # return pool.starmap(print_trace, fun_args, chunksize=1)
+        return list(itertools.starmap(print_trace, fun_args))
 
 
 @contextlib.contextmanager
-def csv_reader(filename):
-    with open_compressed(filename, 'rb') as f:
+def csv_reader(filename, mode='rt'):
+    with open_compressed(filename, mode) as f:
         yield csv.reader(f)
 
 
 @contextlib.contextmanager
 def csv_writer(filename):
-    with open_compressed(filename, 'wb') as f:
+    with open_compressed(filename, 'wt') as f:
         yield csv.writer(f)
 
 
@@ -210,7 +213,7 @@ def protobuf_to_dict(message):
 
 def dict_to_protobuf(raw, message):
     assert isinstance(raw, dict)
-    for key, raw_value in raw.iteritems():
+    for key, raw_value in raw.items():
         if isinstance(raw_value, dict):
             value = getattr(message, key)
             dict_to_protobuf(raw_value, value)
@@ -279,24 +282,24 @@ def pretty_print(filename, message_type='guess'):
     protocol = parts[-1]
     if protocol == 'json':
         data = json_load(filename)
-        print json.dumps(data, sort_keys=True, indent=4)
+        print(json.dumps(data, sort_keys=True, indent=4))
     elif protocol == 'pb':
         message = get_message(filename, message_type)
-        with open_compressed(filename) as f:
+        with open_compressed(filename, 'rb') as f:
             message.ParseFromString(f.read())
-            print message
+            print(message)
     elif protocol == 'pbs':
         message = get_message(filename, message_type)
         for string in protobuf_stream_load(filename):
             message.ParseFromString(string)
-            print message
+            print(message)
     elif protocol == 'pickle':
         data = pickle_load(filename)
-        print repr(data)
+        print(repr(data))
     else:
         with open_compressed(filename) as f:
             for line in f:
-                print line,
+                print(line)
 
 
 @parsable.command

@@ -270,7 +270,7 @@ def infer(
         for _ in protobuf_stream_load(os.path.join(groups, f)):
             group_count += 1
         group_counts.append(group_count)
-    print 'group_counts: {}'.format(' '.join(map(str, group_counts)))
+    print('group_counts: {}'.format(' '.join(map(str, group_counts))))
 
 
 def _load_checkpoint(step):
@@ -300,7 +300,7 @@ def load_checkpoint(name=None, period_sec=5, debug=False):
         step = 0
         mkdir_p(str(step))
         kwargs = checkpoint_files(step, '_out')
-        print 'running checkpoint {}, tardis_iter 0'.format(step)
+        print('running checkpoint {}, tardis_iter 0'.format(step))
         loom.runner.infer(
             config_in=results['samples'][0]['config'],
             rows_in=inputs['samples'][0]['shuffled'],
@@ -315,9 +315,11 @@ def load_checkpoint(name=None, period_sec=5, debug=False):
         while not checkpoint.finished:
             rm_rf(str(step - 3))
             step += 1
-            print 'running checkpoint {}, tardis_iter {}'.format(
-                step,
-                checkpoint.tardis_iter)
+            print(
+                'running checkpoint {}, tardis_iter {}'.format(
+                    step, checkpoint.tardis_iter
+                )
+            )
             kwargs = checkpoint_files(step - 1, '_in')
             mkdir_p(str(step))
             kwargs.update(checkpoint_files(step, '_out'))
@@ -330,16 +332,20 @@ def load_checkpoint(name=None, period_sec=5, debug=False):
                 **kwargs)
             checkpoint = _load_checkpoint(step)
 
-        print 'final checkpoint {}, tardis_iter {}'.format(
-            step,
-            checkpoint.tardis_iter)
+        print(
+            'final checkpoint {}, tardis_iter {}'.format(
+                step, checkpoint.tardis_iter
+            )
+        )
 
         last_full = str(step - 2)
         assert os.path.exists(last_full), 'too few checkpoints'
         checkpoint = _load_checkpoint(step)
-        print 'saving checkpoint {}, tardis_iter {}'.format(
-            last_full,
-            checkpoint.tardis_iter)
+        print(
+            'saving checkpoint {}, tardis_iter {}'.format(
+                last_full, checkpoint.tardis_iter
+            )
+        )
         for f in checkpoint_files(last_full).values():
             shutil.move(f, results['root'])
         for f in glob.glob(os.path.join(results['root'], '[0-9]*/')):
@@ -399,9 +405,9 @@ def related(
     encoding = inputs['ingest']['encoding']
     features = sorted(json_load(inputs['ingest']['schema']).keys())
 
-    print 'starting server'
+    print('starting server')
     with loom.preql.get_server(root, encoding, debug, profile) as preql:
-        print 'querying {} features'.format(len(features))
+        print('querying {} features'.format(len(features)))
         preql.relate(features, sample_count=sample_count)
 
 

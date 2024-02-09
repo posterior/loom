@@ -26,11 +26,11 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import itertools
 import os
 import numpy
 import pymetis
 import pymetis._internal  # HACK to avoid errors finding .so files in path
-from itertools import izip
 from collections import defaultdict
 from collections import namedtuple
 from distributions.io.stream import json_dump
@@ -55,22 +55,21 @@ def collate(pairs):
 
 def group(root, feature_name, parallel=False):
     paths = loom.store.get_paths(root, sample_count=None)
-    map_ = parallel_map if parallel else map
-    groupings = map_(group_sample, [
-        (sample, feature_name)
-        for sample in paths['samples']
-    ])
+    map_ = parallel_map if parallel else itertools.starmap
+    groupings = map_(
+        group_sample, [(sample, feature_name) for sample in paths['samples']]
+    )
     return group_reduce(groupings)
 
 
-def group_sample((sample, featureid)):
+def group_sample(sample, featureid):
     model = CrossCat()
-    with open_compressed(sample['model']) as f:
+    with open_compressed(sample['model'], mode='rb') as f:
         model.ParseFromString(f.read())
     for kindid, kind in enumerate(model.kinds):
         if featureid in kind.featureids:
             break
-    assignments = assignment_stream_load(sample['assign'])
+    assignments = assignment_stream_load(sample['assign'].encode('utf-8'))
     return collate((a.groupids(kindid), a.rowid) for a in assignments)
 
 
@@ -113,23 +112,27 @@ def find_consensus_grouping(groupings, debug=False):
     # ------------------------------------------------------------------------
     # Set up consensus grouping problem
 
-    allgroups = sum(groupings, [])
+    groupings_list = list(groupings)
+    allgroups = sum((list(g) for g in groupings_list), [])
     objects = list(set(sum(allgroups, [])))
     objects.sort()
     index = {item: i for i, item in enumerate(objects)}
 
-    vertices = [numpy.array(map(index.__getitem__, g), dtype=numpy.intp)
-                for g in allgroups]
+    vertices = [
+        numpy.array(list(map(index.__getitem__, g)), dtype=numpy.intp)
+        for g in allgroups
+    ]
 
     contains = numpy.zeros((len(vertices), len(objects)), dtype=numpy.float32)
     for v, vertex in enumerate(vertices):
-        contains[v, vertex] = 1  # i.e. for u in vertex: contains[v, u] = i
+      contains[v, vertex] = 1  # i.e. for u in vertex: contains[v, u] = i
 
     # We use the binary Jaccard measure for similarity
     overlap = numpy.dot(contains, contains.T)
     diag = overlap.diagonal()
-    denom = (diag.reshape(len(vertices), 1) +
-             diag.reshape(1, len(vertices)) - overlap)
+    denom = (
+        diag.reshape(len(vertices), 1) + diag.reshape(1, len(vertices)) - overlap
+    )
     similarity = overlap / denom
 
     # ------------------------------------------------------------------------
@@ -139,10 +142,10 @@ def find_consensus_grouping(groupings, debug=False):
         raise LoomError('similarity.max() = {}'.format(similarity.max()))
     similarity *= 2**16  # metis segfaults if this is too large
     int_similarity = numpy.zeros(similarity.shape, dtype=numpy.int32)
-    int_similarity[:] = numpy.rint(similarity)
+    numpy.rint(similarity, out=int_similarity, casting='unsafe')
 
     edges = int_similarity.nonzero()
-    edge_weights = map(int, int_similarity[edges])
+    edge_weights = list(map(int, int_similarity[edges]))
     edges = numpy.transpose(edges)
 
     adjacency = [[] for _ in vertices]
@@ -150,7 +153,7 @@ def find_consensus_grouping(groupings, debug=False):
         adjacency[i].append(j)
 
     # FIXME is there a better way to choose the final group count?
-    group_count = int(numpy.median(map(len, groupings)))
+    group_count = int(numpy.median(list(map(len, groupings_list))))
 
     metis_args = {
         'nparts': group_count,
@@ -193,10 +196,10 @@ def find_consensus_grouping(groupings, debug=False):
 
     grouping = [
         Row(row_id=objects[i], group_id=reindex[g], confidence=c)
-        for i, (g, c) in enumerate(izip(bestmatch, confidence))
+        for i, (g, c) in enumerate(zip(bestmatch, confidence))
     ]
 
-    groups = collate((row.group_id, row) for row in grouping)
+    groups = list(collate((row.group_id, row) for row in grouping))
     groups.sort(key=len, reverse=True)
     grouping = [
         Row(row_id=row.row_id, group_id=group_id, confidence=row.confidence)

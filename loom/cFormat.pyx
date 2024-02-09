@@ -54,7 +54,7 @@ cdef extern from "loom/schema.pb.h":
     cppclass Value_cc "protobuf::loom::ProductValue":
         Value_cc "Value" () nogil except +
         void Clear () nogil except +
-        int ByteSize () nogil except +
+        size_t ByteSizeLong () nogil except +
         Observed_cc * observed "mutable_observed" () nogil except +
         int booleans_size () nogil except +
         bool booleans (int index) nogil except +
@@ -69,7 +69,7 @@ cdef extern from "loom/schema.pb.h":
     cppclass Row_cc "protobuf::loom::Row":
         Row_cc "Row" () nogil except +
         void Clear () nogil except +
-        int ByteSize () nogil except +
+        size_t ByteSizeLong () nogil except +
         uint64_t id () except +
         void set_id (uint64_t value) except +
         Value_cc * pos "mutable_diff()->mutable_pos" () except +
@@ -78,7 +78,7 @@ cdef extern from "loom/schema.pb.h":
     cppclass Assignment_cc "protobuf::loom::Assignment":
         Assignment_cc "Assignment" () nogil except +
         void Clear () nogil except +
-        int ByteSize () nogil except +
+        size_t ByteSizeLong () nogil except +
         uint64_t rowid () except +
         void set_rowid (uint64_t value) except +
         int groupids_size () nogil except +
@@ -129,8 +129,8 @@ cdef class Row:
         self.ptr.pos().observed().set_sparsity(SPARSITY_DENSE)
         self.ptr.neg().observed().set_sparsity(SPARSITY_NONE)
 
-    def ByteSize(self):
-        return self.ptr.ByteSize()
+    def ByteSizeLong(self):
+        return self.ptr.ByteSizeLong()
 
     property id:
         def __set__(self, uint64_t id_):
@@ -158,7 +158,7 @@ cdef class Row:
         assert self.ptr.pos().observed().sparsity() == SPARSITY_DENSE,\
             SPARSITY_ERRORS[self.ptr.pos().observed().sparsity()]
         cdef int i
-        for i in xrange(self.ptr.pos().observed().dense_size()):
+        for i in range(self.ptr.pos().observed().dense_size()):
             yield self.ptr.pos().observed().dense(i)
         raise StopIteration()
 
@@ -173,7 +173,7 @@ cdef class Row:
 
     def iter_booleans(self):
         cdef int i
-        for i in xrange(self.booleans_size()):
+        for i in range(self.booleans_size()):
             yield self.booleans(i)
         raise StopIteration()
 
@@ -188,7 +188,7 @@ cdef class Row:
 
     def iter_counts(self):
         cdef int i
-        for i in xrange(self.counts_size()):
+        for i in range(self.counts_size()):
             yield self.counts(i)
         raise StopIteration()
 
@@ -203,7 +203,7 @@ cdef class Row:
 
     def iter_reals(self):
         cdef int i
-        for i in xrange(self.reals_size()):
+        for i in range(self.reals_size()):
             yield self.reals(i)
         raise StopIteration()
 
@@ -239,8 +239,8 @@ cdef class Assignment:
     def Clear(self):
         self.ptr.Clear()
 
-    def ByteSize(self):
-        return self.ptr.ByteSize()
+    def ByteSizeLong(self):
+        return self.ptr.ByteSizeLong()
 
     property rowid:
         def __set__(self, uint64_t rowid):
@@ -262,7 +262,7 @@ cdef class Assignment:
         cdef int i
         cdef list groupids = [
             self.ptr.groupids(i)
-            for i in xrange(self.ptr.groupids_size())
+            for i in range(self.ptr.groupids_size())
         ]
         return {'rowid': self.ptr.rowid(), 'groupids': groupids}
 

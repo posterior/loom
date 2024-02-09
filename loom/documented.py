@@ -122,14 +122,14 @@ def make_dataflow(test=False, filenames=True):
     if not test:
         transforms = {
             key: props
-            for key, props in transforms.iteritems()
+            for key, props in transforms.items()
             if props.get('role') != 'test'
         }
 
     datas = {}
     paths = loom.store.get_paths('dataset')
     root = paths['root']
-    for props in transforms.itervalues():
+    for props in transforms.values():
         for key in props.get('inputs', []) + props.get('outputs', []):
             name = key.replace('.', '_')
             if filenames and '.' in key:
@@ -140,8 +140,8 @@ def make_dataflow(test=False, filenames=True):
             else:
                 datas[name] = '<<FONT POINT-SIZE="18">{}</FONT>>'.format(key)
 
-    datas = sorted(datas.iteritems())
-    transforms = sorted(transforms.iteritems(), key=lambda (key, props): key)
+    datas = sorted(list(datas.items()))
+    transforms = sorted(list(transforms.items()), key=lambda key, props: key)
 
     filename = os.path.join(DOC, 'dataflow.dot')
     write_graphviz(datas, transforms, filename)

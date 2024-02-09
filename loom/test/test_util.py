@@ -28,12 +28,15 @@
 
 import os
 import loom.util
-from loom.test.util import for_each_dataset
+from loom.test.util import get_test_kwargs
+import pytest
 
 
-@for_each_dataset
-def test_cat(name, **paths):
-    _test_cat(name, paths)
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_cat(dataset):
+    kwargs = get_test_kwargs(dataset)
+    name = kwargs.pop('name')
+    _test_cat(name, kwargs)
 
 
 def _test_cat(name, paths):
@@ -42,5 +45,5 @@ def _test_cat(name, paths):
             for f in os.listdir(filename):
                 _test_cat('{}.{}'.format(name, key), os.path.join(filename, f))
         else:
-            print '==== {} ===='.format(key)
+            print('==== {} ===='.format(key))
             loom.util.cat(filename)
