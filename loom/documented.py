@@ -141,7 +141,7 @@ def make_dataflow(test=False, filenames=True):
                 datas[name] = '<<FONT POINT-SIZE="18">{}</FONT>>'.format(key)
 
     datas = sorted(list(datas.items()))
-    transforms = sorted(list(transforms.items()), key=lambda key, props: key)
+    transforms = sorted(list(transforms.items()), key=lambda item: item[0])
 
     filename = os.path.join(DOC, 'dataflow.dot')
     write_graphviz(datas, transforms, filename)

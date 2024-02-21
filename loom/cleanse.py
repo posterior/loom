@@ -42,8 +42,8 @@ def force_ascii(filename_in, filename_out, size=4096):
         with_ = stack.enter_context
         if filename_out is None:
             filename_out = with_(loom.util.temp_copy(filename_in))
-        source = with_(open_compressed(filename_in, 'r'))
-        destin = with_(open_compressed(filename_out, 'w'))
+        source = with_(open_compressed(filename_in, 'rt'))
+        destin = with_(open_compressed(filename_out, 'wt'))
         chunk = source.read(size)
         while chunk:
             destin.write(re_nonascii.sub('', chunk))

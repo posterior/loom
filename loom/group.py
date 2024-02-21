@@ -64,12 +64,13 @@ def group(root, feature_name, parallel=False):
 
 def group_sample(sample, featureid):
     model = CrossCat()
-    with open_compressed(sample['model'], mode='rb') as f:
+    with open_compressed(sample['model'], mode='r') as f:
         model.ParseFromString(f.read())
     for kindid, kind in enumerate(model.kinds):
         if featureid in kind.featureids:
             break
-    assignments = assignment_stream_load(sample['assign'].encode('utf-8'))
+    fname = sample['assign'].encode('utf-8')
+    assignments = assignment_stream_load(fname)
     return collate((a.groupids(kindid), a.rowid) for a in assignments)
 
 

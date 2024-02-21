@@ -27,10 +27,10 @@
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import urllib
+import urllib.request
 import subprocess
 from contextlib2 import ExitStack
-from StringIO import StringIO
+from io import StringIO
 import parsable
 import loom.util
 import loom.cleanse
@@ -87,7 +87,7 @@ def savefig(name):
     from matplotlib import pyplot
     for ext in ['pdf', 'png', 'eps']:
         filename = os.path.join(DATA, '{}.{}'.format(name, ext))
-        print 'saving', filename
+        print('saving', filename)
         pyplot.savefig(filename)
 
 
@@ -101,19 +101,20 @@ def download():
         for filename in FILES:
             if not os.path.exists(filename):
                 url = URL + filename
-                print 'fetching {}'.format(url)
-                urllib.urlretrieve(url, filename)
-            print 'extracting {}'.format(filename)
+                print('fetching {}'.format(url))
+                urllib.request.urlretrieve(url, filename)
+            print('extracting {}'.format(filename))
             subprocess.check_call(['unzip', '-n', filename])
 
 
-def cleanse_one(filename):
+def cleanse_one(*args):
+    filename, = args
     row_count = ROW_COUNTS[filename]
     source = os.path.join(DOWNLOADS, filename)
     destin = os.path.join(CLEANSED, filename + '.gz')
-    print 'forcing ascii', filename
+    print('forcing ascii', filename)
     loom.cleanse.force_ascii(source, destin)
-    print 'truncating', filename
+    print('truncating', filename)
     with ExitStack() as stack:
         with_ = stack.enter_context
         temp = with_(loom.util.temp_copy(destin))
@@ -134,8 +135,8 @@ def cleanse():
     '''
     Cleanse input files.
     '''
-    loom.util.parallel_map(cleanse_one, ROW_COUNTS.keys())
-    print 'repartitioning'
+    loom.util.parallel_map(cleanse_one, [(k,) for k in ROW_COUNTS.keys()])
+    print('repartitioning')
     loom.cleanse.repartition_csv_dir(CLEANSED)
 
 
@@ -197,21 +198,21 @@ def plot_related(target='loan_status', feature_count=100, save=False):
     import scipy.cluster
     from matplotlib import pyplot
 
-    print 'loading data'
+    print('loading data')
     df = pandas.read_csv(RELATED, index_col=0)
     if target and target.lower() != 'none':
-        df = df.sort(target, ascending=False)[:feature_count].transpose()
-        df = df.sort(target, ascending=False)[:feature_count].copy()
+        df = df.sort_values(target, ascending=False)[:feature_count].transpose()
+        df = df.sort_values(target, ascending=False)[:feature_count].copy()
 
-    print 'sorting features'
-    matrix = df.as_matrix()
+    print('sorting features')
+    matrix = df.to_numpy()
     dist = scipy.spatial.distance.pdist(matrix)
     clust = scipy.cluster.hierarchy.complete(dist)
     order = scipy.cluster.hierarchy.leaves_list(clust)
     sorted_matrix = matrix[order].T[order].T
     sorted_labels = [df.index[i].replace('_', ' ') for i in order]
 
-    print 'plotting'
+    print('plotting')
     pyplot.figure(figsize=(18, 18))
     pyplot.imshow(
         sorted_matrix ** 0.5,
@@ -240,8 +241,8 @@ def find_related(target='loan_status', count=30):
     import pandas
     df = pandas.read_csv(RELATED, index_col=0)
     df.sort(target, ascending=False, inplace=True)
-    print 'Top {} features related to {}:'.format(count, target)
-    print df[:count][target]
+    print('Top {} features related to {}:'.format(count, target))
+    print(df[:count][target])
 
 
 @parsable.command
@@ -272,7 +273,7 @@ def predict(
     groups = df.groupby([batch, target]).size() / count
     counts = pandas.concat([groups[i] for i in range(3)], axis=1)
     counts.columns = ['unknown', 'present', 'absent']
-    counts.sort('unknown', inplace=True)
+    counts.sort_values('unknown', inplace=True)
     counts.plot(kind='barh')
     pyplot.grid()
     pyplot.title('{} -vs- {}'.format(target, vs))
@@ -309,7 +310,7 @@ def print_groups(target='loan_status'):
     stats_list = []
     stats = None
     with loom.util.csv_reader(GROUP.format(target)) as reader:
-        header = reader.next()
+        header = next(reader)
         assert header
         for row_id, group_id, confidence in reader:
             group_id = int(group_id)
@@ -331,11 +332,11 @@ def print_groups(target='loan_status'):
         stats['row'] = ','.join(rows[stats['example']])
     stats_list.sort(key=lambda stats: stats['sum'], reverse=True)
     # FIXME print in csv format, including header
-    print ('{:>12}' * 4).format('count', 'weight', 'id', 'example')
-    print '-' * 12 * 4
+    print('{:>12}' * 4).format('count', 'weight', 'id', 'example')
+    print('-' * 12 * 4)
     for stats in stats_list:
-        print '{count:>12}{sum:>12.1f}{group_id:>12}{example:>12}: '\
-            '{row}'.format(**stats)
+        print('{count:>12}{sum:>12.1f}{group_id:>12}{example:>12}: ' 
+              '{row}'.format(**stats))
 
 
 @parsable.command

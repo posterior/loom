@@ -38,7 +38,7 @@ FEATURE_TYPES += ['mixed']
 
 def test_generate():
     for feature_type in FEATURE_TYPES:
-        yield _test_generate, feature_type
+        _test_generate(feature_type)
 
 
 def _test_generate(feature_type):

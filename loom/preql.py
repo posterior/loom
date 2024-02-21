@@ -61,7 +61,7 @@ def csv_output(arg):
     elif hasattr(arg, 'write'):
         yield CsvWriter(arg)
     else:
-        with open_compressed(arg, 'w') as outfile:
+        with open_compressed(arg, 'wt') as outfile:
             yield CsvWriter(outfile)
 
 
@@ -651,9 +651,9 @@ class PreQL(object):
             entries ij giving the similarity score between row i
             and row j.
         '''
-        rows = map(self.encode_row, rows)
+        rows = list(map(self.encode_row, rows))
         if rows2 is not None:
-            rows2 = map(self.encode_row, rows2)
+            rows2 = list(map(self.encode_row, rows2))
         else:
             rows2 = rows
         with csv_output(result_out) as writer:
@@ -725,7 +725,7 @@ class PreQL(object):
         labels = clustering.fit_predict(similar)
 
         if rows_to_cluster is None:
-            return zip(labels, seed_rows)
+            return list(zip(labels, seed_rows))
         else:
             row_labels = []
             for row in rows_to_cluster:
@@ -738,12 +738,12 @@ class PreQL(object):
                     delimiter=',',
                     skip_header=0)
                 assert len(similar_scores) == len(labels)
-                label_scores = zip(similar_scores, labels)
+                label_scores = list(zip(similar_scores, labels))
                 top = sorted(label_scores, reverse=True)[:nearest_neighbors]
-                label_counts = Counter(zip(*top)[1]).items()
+                label_counts = Counter(list(zip(*top))[1]).items()
                 top_label = sorted(label_counts, key=lambda x: -x[1])[0][0]
                 row_labels.append(top_label)
-            return zip(row_labels, rows_to_cluster)
+            return list(zip(row_labels, rows_to_cluster))
 
 
 def normalize_mutual_information(mutual_info):
