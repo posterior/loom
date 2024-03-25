@@ -29,7 +29,7 @@
 import os
 from nose.tools import assert_equal, assert_not_equal, assert_list_equal
 from loom.test.util import (
-    for_each_dataset,
+    get_test_kwargs,
     CLEANUP_ON_ERROR,
     assert_found,
     load_rows,
@@ -37,11 +37,14 @@ from loom.test.util import (
 )
 from distributions.fileutil import tempdir
 import loom.runner
+import pytest
 
 
-@for_each_dataset
-def test_one_to_one(rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_one_to_one(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+        kwargs = get_test_kwargs(dataset)
+        rows = kwargs['rows']
         seed = 12345
         rows_out = os.path.abspath('rows_out.pbs.gz')
         loom.runner.shuffle(
@@ -60,10 +63,12 @@ def test_one_to_one(rows, **unused):
         assert_list_equal(expected, actual)
 
 
-@for_each_dataset
-def test_chunking(rows, **unused):
-    targets = [10.0 ** i for i in xrange(6)]
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_chunking(dataset):
+    targets = [10.0 ** i for i in range(6)]
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+        kwargs = get_test_kwargs(dataset)
+        rows = kwargs['rows']
         seed = 12345
         rows_out = os.path.abspath('rows.out.{}.pbs.gz')
 
@@ -76,7 +81,7 @@ def test_chunking(rows, **unused):
 
         results = [
             load_rows_raw(rows_out.format(i))
-            for i in xrange(len(targets))
+            for i in range(len(targets))
         ]
         for i, actual in enumerate(results):
             for expected in results[:i]:

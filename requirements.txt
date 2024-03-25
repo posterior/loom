@@ -2,12 +2,13 @@ contextlib2>=0.4.0
 cpplint
 cython>=0.20.1
 goftests
+imageio
 matplotlib
 mock
 nose
 numpy>=1.7.0
 pandas
-parsable>=0.2.0
+parsable>=0.3.1
 pep8
 protobuf
 pyflakes

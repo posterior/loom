@@ -26,11 +26,11 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import math
 import os
 import re
 import datetime
 import dateutil.parser
-from itertools import izip
 from collections import Counter
 from contextlib2 import ExitStack
 from distributions.io.stream import json_dump
@@ -58,7 +58,7 @@ EXAMPLE_VALUES = {
     'text': ['This is a text feature.', 'Hello World!'],
     'tags': ['', 'big_data machine_learning platform'],
 }
-for fluent_type, values in EXAMPLE_VALUES.items():
+for fluent_type, values in EXAMPLE_VALUES.copy().items():
     EXAMPLE_VALUES['optional_{}'.format(fluent_type)] = [''] + values
 EXAMPLE_VALUES['id'] = ['any unique string can serve as an id']
 
@@ -76,7 +76,7 @@ decode_bool = load_decoder({'model': 'bb'})
 
 def get_row_dict(header, row):
     '''By convention, empty strings are omitted from the result dict.'''
-    return {key: value for key, value in izip(header, row) if value}
+    return {key: value for key, value in zip(header, row) if value}
 
 
 class TransformSequence(object):
@@ -174,7 +174,7 @@ class PresenceTransform(object):
             feature_set.add(self.value_name)
 
     def forward(self, row_dict):
-        present = (self.feature_name in row_dict)
+        present = self.feature_name in row_dict
         row_dict[self.present_name] = decode_bool(present)
         if present:
             row_dict[self.value_name] = row_dict[self.feature_name]
@@ -184,7 +184,8 @@ class PresenceTransform(object):
             if encode_bool(row_dict[self.present_name]):
                 row_dict[self.feature_name] = row_dict[self.value_name]
             else:
-                del row_dict[self.feature_name]  # nonmonotone
+                if self.feature_name in row_dict:
+                    del row_dict[self.feature_name]  # nonmonotone
 
 
 class SparseRealTransform(object):
@@ -206,7 +207,7 @@ class SparseRealTransform(object):
         feature_name = self.feature_name
         if feature_name in row_dict:
             value = float(row_dict[feature_name])
-            nonzero = (value == self.tare_value)
+            nonzero = (value != self.tare_value)
             row_dict[self.nonzero_name] = decode_bool(nonzero)
             if nonzero:
                 row_dict[self.value_name] = value
@@ -319,15 +320,15 @@ class DateTransform(object):
             self.abs_names['mod.week']: 'dpd',
             self.abs_names['mod.day']: 'dpd',
         }
-        for rel_name in self.rel_names.itervalues():
+        for rel_name in self.rel_names.values():
             schema[rel_name] = 'nich'
         return schema
 
     def forward_set(self, feature_set):
         if self.feature_name in feature_set:
-            for feature_name in self.abs_names.itervalues():
+            for feature_name in self.abs_names.values():
                 feature_set.add(feature_name)
-            for relative, feature_name in self.rel_names.iteritems():
+            for relative, feature_name in self.rel_names.items():
                 if relative in feature_set:
                     feature_set.add(feature_name)
 
@@ -342,7 +343,7 @@ class DateTransform(object):
             row_dict[abs_names['mod.week']] = date.weekday()
             row_dict[abs_names['mod.day']] = date.hour
 
-            for relative, rel_name in self.rel_names.iteritems():
+            for relative, rel_name in self.rel_names.items():
                 if relative in row_dict:
                     other_date = dateutil.parser.parse(row_dict[relative])
                     row_dict[rel_name] = days_between(other_date, date)
@@ -352,8 +353,9 @@ class DateTransform(object):
         abs_name = self.abs_names['absolute']
         if abs_name in row_dict:
             days_since_epoch = float(row_dict[abs_name])
-            date = EPOCH + datetime.timedelta(days_since_epoch)
-            row_dict[self.feature_name] = str(date)
+            if not math.isnan(days_since_epoch):
+                date = EPOCH + datetime.timedelta(days_since_epoch)
+                row_dict[self.feature_name] = str(date)
 
 
 # ----------------------------------------------------------------------------
@@ -362,7 +364,7 @@ class DateTransform(object):
 def load_schema(schema_csv):
     fluent_schema = {}
     with loom.util.csv_reader(schema_csv) as reader:
-        reader.next()  # ignore header; parse positionally
+        next(reader)  # ignore header; parse positionally
         for row in reader:
             if len(row) >= 2:
                 feature_name = row[0]
@@ -379,7 +381,7 @@ def build_transforms(rows_in, transforms, builders):
         filenames = [rows_in]
     for filename in filenames:
         with loom.util.csv_reader(filename) as reader:
-            header = reader.next()
+            header = next(reader)
             for row in reader:
                 row_dict = get_row_dict(header, row)
                 for transform in transforms:
@@ -401,11 +403,11 @@ def make_transforms(schema_in, rows_in, schema_out, transforms_out):
     builders = []
     dates = [
         feature_name
-        for feature_name, fluent_type in fluent_schema.iteritems()
+        for feature_name, fluent_type in fluent_schema.items()
         if fluent_type.endswith('date')
     ]
     id_field = None
-    for feature_name, fluent_type in fluent_schema.iteritems():
+    for feature_name, fluent_type in fluent_schema.items():
         # parse adjectives
         if fluent_type.startswith('optional_'):
             transform = PresenceTransform(feature_name)
@@ -450,12 +452,12 @@ def make_transforms(schema_in, rows_in, schema_out, transforms_out):
 # applying transforms
 
 
-def _transform_rows((transform, transformed_header, rows_in, rows_out)):
+def _transform_rows(transform, transformed_header, rows_in, rows_out):
     with ExitStack() as stack:
         with_ = stack.enter_context
         reader = with_(loom.util.csv_reader(rows_in))
         writer = with_(loom.util.csv_writer(rows_out))
-        header = reader.next()
+        header = next(reader)
         writer.writerow(transformed_header)
         for row in reader:
             row = transform.forward_row(header, transformed_header, row)
@@ -472,7 +474,7 @@ def transform_rows(schema_in, transforms_in, rows_in, rows_out, id_field=None):
         cp_ns(rows_in, rows_out)
     else:
         transform = TransformSequence(transforms)
-        transformed_header = sorted(json_load(schema_in).iterkeys())
+        transformed_header = sorted(json_load(schema_in).keys())
         if id_field is not None:
             assert id_field not in transformed_header
             transformed_header = [id_field] + transformed_header

@@ -28,16 +28,17 @@
 
 import os
 from distributions.fileutil import tempdir
-from loom.test.util import for_each_dataset, CLEANUP_ON_ERROR, assert_found
+from loom.test.util import CLEANUP_ON_ERROR, assert_found, get_test_kwargs
 import loom.generate
+import pytest
 
-FEATURE_TYPES = loom.schema.MODELS.keys()
+FEATURE_TYPES = list(loom.schema.MODELS.keys())
 FEATURE_TYPES += ['mixed']
 
 
 def test_generate():
     for feature_type in FEATURE_TYPES:
-        yield _test_generate, feature_type
+        _test_generate(feature_type)
 
 
 def _test_generate(feature_type):
@@ -61,11 +62,11 @@ def _test_generate(feature_type):
             profile=None)
 
 
-@for_each_dataset
-def test_generate_init(encoding, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_generate_init(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
         init_out = os.path.abspath('init.pb.gz')
-        loom.generate.generate_init(
-            encoding_in=encoding,
-            model_out=init_out)
+        kwargs = get_test_kwargs(dataset)
+        encoding = kwargs['encoding']
+        loom.generate.generate_init(encoding_in=encoding, model_out=init_out)
         assert_found(init_out)

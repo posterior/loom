@@ -28,12 +28,12 @@
 
 import os
 import numpy.random
-from itertools import izip
 from distributions.fileutil import tempdir
 import loom.store
 import loom.transforms
 import loom.tasks
 from loom.transforms import EXAMPLE_VALUES
+import numpy.random
 
 
 def generate_cell(possible_values, observed_prob=0.5):
@@ -46,7 +46,7 @@ def generate_cell(possible_values, observed_prob=0.5):
 def generate_example(schema_csv, rows_csv, row_count=100):
     feature_names = []
     fluent_types = []
-    for fluent_type in EXAMPLE_VALUES.iterkeys():
+    for fluent_type in EXAMPLE_VALUES.keys():
         if fluent_type != 'id':
             fluent_types.append(fluent_type)
             feature_names.append('{}_feature'.format(fluent_type))
@@ -54,11 +54,11 @@ def generate_example(schema_csv, rows_csv, row_count=100):
     with loom.util.csv_writer(schema_csv) as writer:
         writer.writerow(['Feature Name', 'Type'])
         writer.writerow(['id', 'id'])
-        writer.writerows(izip(feature_names, fluent_types))
+        writer.writerows(zip(feature_names, fluent_types))
 
     with loom.util.csv_writer(rows_csv) as writer:
         writer.writerow(['id'] + feature_names)
-        for row_id in xrange(row_count):
+        for row_id in range(row_count):
             values = [
                 generate_cell(EXAMPLE_VALUES[fluent_type])
                 for fluent_type in fluent_types

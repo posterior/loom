@@ -26,7 +26,6 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 # USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from itertools import izip
 from nose.tools import assert_equal
 from nose.tools import assert_set_equal
 from nose.tools import assert_not_equal
@@ -36,11 +35,12 @@ from distributions.io.stream import json_load
 from distributions.io.stream import open_compressed
 from distributions.fileutil import tempdir
 from loom.schema_pb2 import ProductValue, CrossCat, Query
-from loom.test.util import for_each_dataset
+from loom.test.util import get_test_kwargs
 import loom.query
 from loom.query import protobuf_to_data_row
 import loom.config
 from loom.test.util import load_rows
+import pytest
 
 NONE = ProductValue.Observed.NONE
 DENSE = ProductValue.Observed.DENSE
@@ -67,9 +67,9 @@ def get_example_requests(model, rows, query_type='mixed'):
     nontrivials = [True] * feature_count
     for kind in cross_cat.kinds:
         fs = iter(kind.featureids)
-        for model in loom.schema.MODELS.iterkeys():
+        for model in loom.schema.MODELS.keys():
             for shared in getattr(kind.product_model, model):
-                f = fs.next()
+                f = next(fs)
                 if model == 'dd':
                     if len(shared.alphas) == 0:
                         nontrivials[f] = False
@@ -81,7 +81,7 @@ def get_example_requests(model, rows, query_type='mixed'):
 
     observeds = []
     observeds.append(all_observed)
-    for f, nontrivial in izip(featureids, nontrivials):
+    for f, nontrivial in zip(featureids, nontrivials):
         if nontrivial:
             observed = all_observed[:]
             observed[f] = False
@@ -92,7 +92,7 @@ def get_example_requests(model, rows, query_type='mixed'):
             for nontrivial in nontrivials
         ]
         observeds.append(observed)
-    for f, nontrivial in izip(featureids, nontrivials):
+    for f, nontrivial in zip(featureids, nontrivials):
         if nontrivial:
             observed = none_observed[:]
             observed[f] = True
@@ -102,7 +102,7 @@ def get_example_requests(model, rows, query_type='mixed'):
     requests = []
     for i, observed in enumerate(observeds):
         request = Query.Request()
-        request.id = "example-{}".format(i)
+        request.id = 'example-{}'.format(i)
         if query_type in ['sample', 'mixed']:
             set_diff(request.sample.data, none_observed)
             request.sample.to_sample.sparsity = DENSE
@@ -114,12 +114,12 @@ def get_example_requests(model, rows, query_type='mixed'):
     for row in load_rows(rows)[:20]:
         i += 1
         request = Query.Request()
-        request.id = "example-{}".format(i)
+        request.id = 'example-{}'.format(i)
         if query_type in ['sample', 'mixed']:
             request.sample.sample_count = 1
             request.sample.data.MergeFrom(row.diff)
             request.sample.to_sample.sparsity = DENSE
-            conditions = izip(nontrivials, row.diff.pos.observed.dense)
+            conditions = zip(nontrivials, row.diff.pos.observed.dense)
             to_sample = [
                 nontrivial and not is_observed
                 for nontrivial, is_observed in conditions
@@ -158,20 +158,32 @@ def _test_server(root, requests):
                 server.score(pod_request)
 
 
-@for_each_dataset
-def test_sample(root, model, rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_sample(dataset):
+    kwargs = get_test_kwargs(dataset)
+    model = kwargs['model']
+    rows = kwargs['rows']
+    root = kwargs['root']
     requests = get_example_requests(model, rows, 'sample')
     _test_server(root, requests)
 
 
-@for_each_dataset
-def test_score(root, model, rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_score(dataset):
+    kwargs = get_test_kwargs(dataset)
+    model = kwargs['model']
+    rows = kwargs['rows']
+    root = kwargs['root']
     requests = get_example_requests(model, rows, 'score')
     _test_server(root, requests)
 
 
-@for_each_dataset
-def test_batch_score(root, model, rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_batch_score(dataset):
+    kwargs = get_test_kwargs(dataset)
+    model = kwargs['model']
+    rows = kwargs['rows']
+    root = kwargs['root']
     requests = get_example_requests(model, rows, 'score')
     with loom.query.get_server(root, debug=True) as server:
         rows = [
@@ -182,34 +194,44 @@ def test_batch_score(root, model, rows, **unused):
         assert_equal(len(scores), len(rows))
 
 
-@for_each_dataset
-def test_score_derivative_runs(root, rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_score_derivative_runs(dataset):
+    kwargs = get_test_kwargs(dataset)
+    rows = kwargs['rows']
+    root = kwargs['root']
     with loom.query.get_server(root, debug=True) as server:
         rows = load_rows(rows)
         target_row = protobuf_to_data_row(rows[0].diff)
         score_rows = [protobuf_to_data_row(r.diff) for r in rows[:2]]
         results = server.score_derivative(target_row, score_rows)
-        assert len(results) == len(score_rows)
+        assert len(list(results)) == len(score_rows)
 
 
-@for_each_dataset
-def test_score_derivative_against_existing_runs(root, rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_score_derivative_against_existing_runs(dataset):
+    kwargs = get_test_kwargs(dataset)
+    rows = kwargs['rows']
+    root = kwargs['root']
     with loom.query.get_server(root, debug=True) as server:
         rows = load_rows(rows)
         target_row = protobuf_to_data_row(rows[0].diff)
         results = server.score_derivative(
             target_row,
             score_rows=None)
-        assert len(rows) == len(results)
+        assert len(rows) == len(list(results))
         results = server.score_derivative(
             target_row,
             score_rows=None,
             row_limit=1)
-        assert len(results) == 1
+        assert len(list(results)) == 1
 
 
-@for_each_dataset
-def test_seed(root, model, rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_seed(dataset):
+    kwargs = get_test_kwargs(dataset)
+    model = kwargs['model']
+    rows = kwargs['rows']
+    root = kwargs['root']
     requests = get_example_requests(model, rows, 'mixed')
     with tempdir():
         loom.config.config_dump({'seed': 0}, 'config.pb.gz')
@@ -230,10 +252,12 @@ def test_seed(root, model, rows, **unused):
     assert_not_equal(responses1, responses3)
 
 
-@for_each_dataset
-def test_tiled_entropy(root, schema, **unused):
-    feature_count = len(json_load(schema))
-    feature_sets = [frozenset([i]) for i in xrange(feature_count)]
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_tiled_entropy(dataset):
+    kwargs = get_test_kwargs(dataset)
+    feature_count = len(json_load(kwargs['schema']))
+    root = kwargs['root']
+    feature_sets = [frozenset([i]) for i in range(feature_count)]
     kwargs = {
         'row_sets': feature_sets,
         'col_sets': feature_sets,
@@ -241,7 +265,7 @@ def test_tiled_entropy(root, schema, **unused):
     }
     with loom.query.get_server(root, debug=True) as server:
         expected = set(server.entropy(**kwargs))
-        for tile_size in xrange(1, 1 + feature_count):
-            print 'tile_size = {}'.format(tile_size)
+        for tile_size in range(1, 1 + feature_count):
+            print('tile_size = {}'.format(tile_size))
             actual = set(server.entropy(tile_size=tile_size, **kwargs))
             assert_set_equal(expected, actual)

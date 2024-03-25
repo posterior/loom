@@ -78,7 +78,7 @@ DEFAULTS = {
 def fill_in_defaults(config, defaults=DEFAULTS):
     assert isinstance(config, dict), config
     assert isinstance(defaults, dict), defaults
-    for key, default in defaults.iteritems():
+    for key, default in defaults.items():
         if key not in config:
             config[key] = deepcopy(default)
         elif isinstance(default, dict):
@@ -95,7 +95,7 @@ def fill_in_sequential(config):
 
 
 def protobuf_dump(config, message, warn='WARN ignoring config'):
-    for key, value in config.iteritems():
+    for key, value in config.items():
         warn_key = '{}.{}'.format(warn, key) if warn else None
         if hasattr(message, key):
             if isinstance(value, dict):
@@ -103,7 +103,7 @@ def protobuf_dump(config, message, warn='WARN ignoring config'):
             else:
                 setattr(message, key, value)
         elif warn:
-            print warn_key
+            print(warn_key)
 
 
 @loom.documented.transform(
@@ -119,4 +119,4 @@ def config_dump(config, filename):
 
 
 if __name__ == '__main__':
-    print json.dumps(DEFAULTS, indent=4, sort_keys=True)
+    print(json.dumps(DEFAULTS, indent=4, sort_keys=True))

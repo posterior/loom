@@ -30,11 +30,11 @@ import os
 import csv
 import shutil
 import random
-from StringIO import StringIO
+from io import StringIO
+import imageio
 import numpy
 import numpy.random
 import scipy
-import scipy.misc
 import scipy.ndimage
 from matplotlib import pyplot
 from distributions.dbg.random import sample_discrete
@@ -55,7 +55,7 @@ SCHEMA = os.path.join(ROOT, 'schema.json')
 DATA = os.path.join(ROOT, 'data')
 RESULTS = os.path.join(ROOT, 'results')
 SAMPLES = os.path.join(DATA, 'samples.csv.gz')
-IMAGE = scipy.misc.imread(os.path.join(ROOT, 'fox.png'))
+IMAGE = imageio.imread(os.path.join(ROOT, 'fox.png'))
 ROW_COUNT = 10000
 PASSES = 10
 EMPTY_GROUP_COUNT = 10
@@ -90,7 +90,7 @@ def sample_from_image(image, row_count):
     for y_pmf in y_pmfs:
         y_pmf /= (y_pmf.sum() + 1e-8)
 
-    for _ in xrange(row_count):
+    for _ in range(row_count):
         x = sample_discrete(x_pmf)
         y = sample_discrete(y_pmfs[x])
         x += numpy.random.random() - 0.5
@@ -104,13 +104,13 @@ def synthesize_search(name, image_pos):
     image[image_pos] = [0, 255, 0]
     with csv_reader(SAMPLES) as reader:
         rows = list(reader)[1:]
-        rows = [map(float, r) for r in rows]
+        rows = [list(map(float, r)) for r in rows]
     root = loom.store.get_paths(name)['root']
     with loom.preql.get_server(root) as server:
         x, y = to_loom_coordinates(*image_pos)
         search = server.search((str(x), str(y)))
     search = csv.reader(StringIO(search))
-    search.next()
+    next(search)
     for row_id, score in search:
         score = numpy.exp(float(score))
         if score < 1.:
@@ -124,8 +124,8 @@ def synthesize_search(name, image_pos):
 
 def synthesize_clusters(name, sample_count, cluster_count, pixel_count):
     with csv_reader(SAMPLES) as reader:
-        reader.next()
-        samples = map(tuple, reader)
+        next(reader)
+        samples = list(map(tuple, reader))
         pts = random.sample(samples, sample_count)
         samples = random.sample(samples, pixel_count)
 
@@ -136,7 +136,7 @@ def synthesize_clusters(name, sample_count, cluster_count, pixel_count):
             seed_rows=pts,
             cluster_count=cluster_count)
 
-    labels = set(zip(*sample_labels)[0])
+    labels = set(list(zip(*sample_labels))[0])
     label_count = max(labels) + 1
 
     shape = IMAGE.shape
@@ -150,13 +150,13 @@ def synthesize_clusters(name, sample_count, cluster_count, pixel_count):
 
 
 def synthesize_image(name):
-    print 'synthesizing image'
+    print('synthesizing image')
     width, height = IMAGE.shape
     image = numpy.zeros((width, height))
     root = loom.store.get_paths(name)['root']
     with loom.query.get_server(root) as server:
-        for x in xrange(width):
-            for y in xrange(height):
+        for x in range(width):
+            for y in range(height):
                 xy = to_loom_coordinates(x, y)
                 image[x, y] = server.score(xy)
 
@@ -184,17 +184,17 @@ def create_dataset(row_count=ROW_COUNT):
     '''
     Extract dataset from image.
     '''
-    scipy.misc.imsave(os.path.join(RESULTS, 'original.png'), IMAGE)
-    print 'sampling {} points from image'.format(row_count)
-    with open_compressed(SAMPLES, 'w') as f:
+    imageio.imsave(os.path.join(RESULTS, 'original.png'), IMAGE)
+    print('sampling {} points from image'.format(row_count))
+    with open_compressed(SAMPLES, 'wt') as f:
         writer = csv.writer(f)
         writer.writerow(['x', 'y'])
         for row in sample_from_image(IMAGE, row_count):
             writer.writerow(row)
     with csv_reader(SAMPLES) as reader:
-        reader.next()
-        image = visualize_dataset(map(float, row) for row in reader)
-    scipy.misc.imsave(os.path.join(RESULTS, 'samples.png'), image)
+        next(reader)
+        image = visualize_dataset(list(map(float, row)) for row in reader)
+    imageio.imsave(os.path.join(RESULTS, 'samples.png'), image)
 
 
 @parsable.command
@@ -203,11 +203,11 @@ def compress(sample_count=1):
     Compress image using loom.
     '''
     assert os.path.exists(SAMPLES), 'first create dataset'
-    print 'inferring'
+    print('inferring')
     loom.tasks.ingest(NAME, SCHEMA, SAMPLES)
     loom.tasks.infer(NAME, sample_count=sample_count)
     image = synthesize_image(NAME)
-    scipy.misc.imsave(os.path.join(RESULTS, 'loom.png'), image)
+    imageio.imsave(os.path.join(RESULTS, 'loom.png'), image)
 
 
 @parsable.command
@@ -219,9 +219,9 @@ def search(x=50, y=50):
     assert loom.store.get_paths(NAME)['samples'], 'first compress image'
     x = int(x)
     y = int(y)
-    print 'finding points similar to {} {}'.format(x, y)
+    print('finding points similar to {} {}'.format(x, y))
     image = synthesize_search(NAME, (x, y))
-    scipy.misc.imsave(os.path.join(RESULTS, 'search.png'), image)
+    imageio.imsave(os.path.join(RESULTS, 'search.png'), image)
 
 
 @parsable.command
@@ -239,7 +239,7 @@ def cluster(cluster_count=5, sample_count=1000, pixel_count=None):
     assert loom.store.get_paths(NAME)['samples'], 'first compress image'
 
     image = synthesize_clusters(NAME, sample_count, cluster_count, pixel_count)
-    scipy.misc.imsave(os.path.join(RESULTS, 'cluster.png'), image)
+    imageio.imsave(os.path.join(RESULTS, 'cluster.png'), image)
 
 
 @parsable.command
@@ -261,7 +261,7 @@ def run(row_count=ROW_COUNT, sample_count=1):
     '''
     create_dataset(row_count)
     compress(sample_count)
-    print 'see file://{} for results'.format(os.path.join(ROOT, 'index.html'))
+    print('see file://{} for results'.format(os.path.join(ROOT, 'index.html')))
 
 
 if __name__ == '__main__':

@@ -30,8 +30,7 @@ import os
 import csv
 import numpy
 import pandas
-from itertools import izip
-from StringIO import StringIO
+from io import StringIO
 from nose import SkipTest
 from nose.tools import assert_almost_equal
 from nose.tools import assert_equal
@@ -45,15 +44,16 @@ from distributions.tests.util import assert_close
 import loom.preql
 from loom.format import load_encoder
 from loom.test.util import CLEANUP_ON_ERROR
-from loom.test.util import for_each_dataset
+from loom.test.util import get_test_kwargs
 from loom.test.util import load_rows_csv
+import pytest
 
 COUNT = 10
 
 
 def make_fully_observed_row(rows_csv):
     rows = iter(load_rows_csv(rows_csv))
-    header = rows.next()
+    header = next(rows)
     try:
         id_pos = header.index('_id')
     except ValueError:
@@ -65,7 +65,7 @@ def make_fully_observed_row(rows_csv):
                 dense_row.pop(id_pos)
             return dense_row
 
-        for i, (condition, x) in enumerate(izip(dense_row, row)):
+        for i, (condition, x) in enumerate(zip(dense_row, row)):
             if condition == '':
                 dense_row[i] = x
     raise SkipTest('no dense row could be constructed')
@@ -74,15 +74,15 @@ def make_fully_observed_row(rows_csv):
 def _check_predictions(rows_in, result_out, encoding):
     encoders = json_load(encoding)
     name_to_encoder = {e['name']: load_encoder(e) for e in encoders}
-    with open_compressed(rows_in, 'rb') as fin:
+    with open_compressed(rows_in, 'rt') as fin:
         with open(result_out, 'r') as fout:
             in_reader = csv.reader(fin)
             out_reader = csv.reader(fout)
-            fnames = in_reader.next()
-            out_reader.next()
+            fnames = next(in_reader)
+            next(out_reader)
             for in_row in in_reader:
                 for i in range(COUNT):
-                    out_row = out_reader.next()
+                    out_row = next(out_reader)
                     bundle = zip(fnames, in_row, out_row)
                     for name, in_val, out_val in bundle:
                         if name == '_id':
@@ -91,28 +91,34 @@ def _check_predictions(rows_in, result_out, encoding):
                         encode = name_to_encoder[name]
                         observed = bool(in_val.strip())
                         if observed:
-                            assert_almost_equal(
-                                encode(in_val),
-                                encode(out_val))
+                            assert_almost_equal(encode(in_val), encode(out_val))
                         else:
                             assert_true(bool(out_val.strip()))
 
 
-@for_each_dataset
-def test_predict(root, rows_csv, encoding, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_predict(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+        kwargs = get_test_kwargs(dataset)
+        root = kwargs['root']
+        rows_csv = kwargs['rows_csv']
+        encoding = kwargs['encoding']
         with loom.preql.get_server(root, debug=True) as preql:
             result_out = 'predictions_out.csv'
             rows_in = os.listdir(rows_csv)[0]
             rows_in = os.path.join(rows_csv, rows_in)
             preql.predict(rows_in, COUNT, result_out, id_offset=True)
-            print 'DEBUG', open_compressed(rows_in).read()
-            print 'DEBUG', open_compressed(result_out).read()
+            print('DEBUG', open_compressed(rows_in).read())
+            print('DEBUG', open_compressed(result_out).read())
             _check_predictions(rows_in, result_out, encoding)
 
 
-@for_each_dataset
-def test_predict_pandas(root, rows_csv, schema, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_predict_pandas(dataset):
+    kwargs = get_test_kwargs(dataset)
+    schema = kwargs['schema']
+    root = kwargs['root']
+    rows_csv = kwargs['rows_csv']
     feature_count = len(json_load(schema))
     with loom.preql.get_server(root, debug=True) as preql:
         rows_filename = os.path.join(rows_csv, os.listdir(rows_csv)[0])
@@ -121,31 +127,31 @@ def test_predict_pandas(root, rows_csv, schema, **unused):
                 f,
                 converters=preql.converters,
                 index_col='_id')
-        print 'rows_df ='
-        print rows_df
+        print('rows_df =')
+        print(rows_df)
         row_count = rows_df.shape[0]
         assert_equal(rows_df.shape[1], feature_count)
-        _rows_io = StringIO()
-        rows_df.to_csv(_rows_io)
-        rows_io = StringIO(_rows_io.getvalue())
+        rows_io = StringIO(rows_df.to_csv())
         result_string = preql.predict(rows_io, COUNT, id_offset=True)
         result_df = pandas.read_csv(StringIO(result_string), index_col=False)
-        print 'result_df ='
-        print result_df
+        print('result_df =')
+        print(result_df)
         assert_equal(result_df.ndim, 2)
         assert_equal(result_df.shape[0], row_count * COUNT)
         assert_equal(result_df.shape[1], 1 + feature_count)
 
 
-@for_each_dataset
-def test_relate(root, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_relate(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+        kwargs = get_test_kwargs(dataset)
+        root = kwargs['root']
         with loom.preql.get_server(root, debug=True) as preql:
             result_out = 'related_out.csv'
             preql.relate(preql.feature_names, result_out, sample_count=10)
             with open(result_out, 'r') as f:
                 reader = csv.reader(f)
-                header = reader.next()
+                header = next(reader)
                 columns = header[1:]
                 assert_equal(columns, preql.feature_names)
                 zmatrix = numpy.zeros((len(columns), len(columns)))
@@ -158,21 +164,27 @@ def test_relate(root, **unused):
                 assert_close(zmatrix, zmatrix.T)
 
 
-@for_each_dataset
-def test_relate_pandas(root, rows_csv, schema, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_relate_pandas(dataset):
+    kwargs = get_test_kwargs(dataset)
+    schema = kwargs['schema']
+    root = kwargs['root']
     feature_count = len(json_load(schema))
     with loom.preql.get_server(root, debug=True) as preql:
         result_string = preql.relate(preql.feature_names)
         result_df = pandas.read_csv(StringIO(result_string), index_col=0)
-        print 'result_df ='
-        print result_df
+        print('result_df =')
+        print(result_df)
         assert_equal(result_df.ndim, 2)
         assert_equal(result_df.shape[0], feature_count)
         assert_equal(result_df.shape[1], feature_count)
 
 
-@for_each_dataset
-def test_refine_with_conditions(root, rows_csv, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_refine_with_conditions(dataset):
+    kwargs = get_test_kwargs(dataset)
+    root = kwargs['root']
+    rows_csv = kwargs['rows_csv']
     with loom.preql.get_server(root, debug=True) as preql:
         features = preql.feature_names
         conditions = make_fully_observed_row(rows_csv)
@@ -209,31 +221,34 @@ def test_refine_with_conditions(root, rows_csv, **unused):
             conditions)
 
 
-@for_each_dataset
-def test_refine_shape(root, encoding, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_refine_shape(dataset):
+    kwargs = get_test_kwargs(dataset)
+    root = kwargs['root']
     with loom.preql.get_server(root, debug=True) as preql:
         features = preql.feature_names
         target_sets = [
-            features[2 * i: 2 * (i + 1)]
-            for i in xrange(len(features) / 2)
+            features[2 * i : 2 * (i + 1)] for i in range(len(features) // 2)
         ]
         query_sets = [
-            features[2 * i: 2 * (i + 1)]
-            for i in xrange(len(features) / 2)
+            features[2 * i : 2 * (i + 1)] for i in range(len(features) // 2)
         ]
         result = preql.refine(target_sets, query_sets, sample_count=10)
         reader = csv.reader(StringIO(result))
-        header = reader.next()
+        header = next(reader)
         header.pop(0)
-        assert_equal(header, map(min, query_sets))
-        for row, target_set in izip(reader, target_sets):
+        assert_equal(header, list(map(min, query_sets)))
+        for row, target_set in zip(reader, target_sets):
             label = row.pop(0)
             assert_equal(label, min(target_set))
             assert_equal(len(row), len(query_sets))
 
 
-@for_each_dataset
-def test_support_with_conditions(root, rows_csv, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_support_with_conditions(dataset):
+    kwargs = get_test_kwargs(dataset)
+    root = kwargs['root']
+    rows_csv = kwargs['rows_csv']
     with loom.preql.get_server(root, debug=True) as preql:
         features = preql.feature_names
         conditions = make_fully_observed_row(rows_csv)
@@ -262,18 +277,19 @@ def test_support_with_conditions(root, rows_csv, **unused):
             conditions)
 
 
-@for_each_dataset
-def test_support_shape(root, rows_csv, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_support_shape(dataset):
+    kwargs = get_test_kwargs(dataset)
+    root = kwargs['root']
+    rows_csv = kwargs['rows_csv']
     with loom.preql.get_server(root, debug=True) as preql:
         features = preql.feature_names
         conditioning_row = make_fully_observed_row(rows_csv)
         target_sets = [
-            features[2 * i: 2 * (i + 1)]
-            for i in xrange(len(features) / 2)
+            features[2 * i : 2 * (i + 1)] for i in range(len(features) // 2)
         ]
         observed_sets = [
-            features[2 * i: 2 * (i + 1)]
-            for i in xrange(len(features) / 2)
+            features[2 * i : 2 * (i + 1)] for i in range(len(features) // 2)
         ]
         result = preql.support(
             target_sets,
@@ -281,43 +297,53 @@ def test_support_shape(root, rows_csv, **unused):
             conditioning_row,
             sample_count=10)
         reader = csv.reader(StringIO(result))
-        header = reader.next()
+        header = next(reader)
         header.pop(0)
-        assert_equal(header, map(min, observed_sets))
-        for row, target_set in izip(reader, target_sets):
+        assert_equal(header, list(map(min, observed_sets)))
+        for row, target_set in zip(reader, target_sets):
             label = row.pop(0)
             assert_equal(label, min(target_set))
             assert_equal(len(row), len(observed_sets))
 
 
-@for_each_dataset
-def test_group_runs(root, schema, encoding, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_group_runs(dataset):
+    kwargs = get_test_kwargs(dataset)
+    root = kwargs['root']
+    encoding = kwargs['encoding']
+    schema = kwargs['schema']
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
         with loom.preql.get_server(root, encoding, debug=True) as preql:
-            test_columns = json_load(schema).keys()[:10]
+            test_columns = list(json_load(schema).keys())[:10]
             for column in test_columns:
                 groupings_csv = 'group.{}.csv'.format(column)
                 preql.group(column, result_out=groupings_csv)
-                print open(groupings_csv).read()
+                print(open(groupings_csv).read())
 
 
-@for_each_dataset
-def test_group_pandas(root, rows_csv, rows, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_group_pandas(dataset):
+    kwargs = get_test_kwargs(dataset)
+    rows = kwargs['rows']
+    root = kwargs['root']
     row_count = sum(1 for _ in protobuf_stream_load(rows))
     with loom.preql.get_server(root, debug=True) as preql:
         feature_names = preql.feature_names
         for feature in feature_names[:10]:
             result_string = preql.group(feature)
             result_df = pandas.read_csv(StringIO(result_string), index_col=0)
-            print 'result_df ='
-            print result_df
+            print('result_df =')
+            print(result_df)
             assert_equal(result_df.ndim, 2)
             assert_equal(result_df.shape[0], row_count)
             assert_equal(result_df.shape[1], 2)
 
 
-@for_each_dataset
-def test_search_runs(root, rows_csv, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_search_runs(dataset):
+    kwargs = get_test_kwargs(dataset)
+    rows_csv = kwargs['rows_csv']
+    root = kwargs['root']
     rows = load_rows_csv(rows_csv)
     header = rows.pop(0)
     try:
@@ -334,8 +360,11 @@ def test_search_runs(root, rows_csv, **unused):
                 open(search_csv).read()
 
 
-@for_each_dataset
-def test_similar_runs(root, rows_csv, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_similar_runs(dataset):
+    kwargs = get_test_kwargs(dataset)
+    rows_csv = kwargs['rows_csv']
+    root = kwargs['root']
     rows = load_rows_csv(rows_csv)
     header = rows.pop(0)
     try:
@@ -346,6 +375,6 @@ def test_similar_runs(root, rows_csv, **unused):
     for row in rows:
         row.pop(id_pos)
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
-        with loom.preql.get_server(root, debug=True) as preql:
-            search_csv = 'search.csv'
-            preql.similar(rows, result_out=search_csv)
+      with loom.preql.get_server(root, debug=True) as preql:
+          search_csv = 'search.csv'
+          preql.similar(rows, result_out=search_csv)

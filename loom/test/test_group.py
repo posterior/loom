@@ -28,7 +28,6 @@
 
 import os
 import copy
-from itertools import izip
 import pymetis
 from distributions.io.stream import json_load
 import distributions.lp.clustering
@@ -43,11 +42,11 @@ from nose.tools import assert_set_equal
 def test_metis():
 
     if os.path.exists(METIS_ARGS_TEMPFILE):
-        print 'Loading metis args from %s' % METIS_ARGS_TEMPFILE
+        print('Loading metis args from %s' % METIS_ARGS_TEMPFILE)
         args = json_load(METIS_ARGS_TEMPFILE)
 
     else:
-        print 'Using simple metis args'
+        print('Using simple metis args')
         args = {
             'nparts': 2,
             'adjacency': [[0, 2, 3], [1, 2], [0, 1, 2], [0, 3]],
@@ -58,20 +57,19 @@ def test_metis():
 
     assert len(args['eweights']) == sum(map(len, args['adjacency']))
 
-    print 'Running unweighted metis...'
+    print('Running unweighted metis...')
     unweighted = dict(args)
     del unweighted['eweights']
     edge_cut, partition = pymetis.part_graph(**unweighted)
-    print 'Finished unweighted metis'
+    print('Finished unweighted metis')
 
-    print 'Running metis...'
+    print('Running metis...')
     edge_cut, partition = pymetis.part_graph(**args)
-    print 'Finished metis'
+    print('Finished metis')
 
 
 class TestTypeIsCorrect:
     def __init__(self):
-
         ROW_COUNT = 1000
         SAMPLE_COUNT = 10
 
@@ -81,10 +79,10 @@ class TestTypeIsCorrect:
 
     def sample_grouping(self):
         assignments = self.clustering.sample_assignments(len(self.row_ids))
-        return loom.group.collate(izip(assignments, self.row_ids))
+        return loom.group.collate(zip(assignments, self.row_ids))
 
     def sample_groupings(self):
-        return [self.sample_grouping() for _ in xrange(self.sample_count)]
+        return [self.sample_grouping() for _ in range(self.sample_count)]
 
     def test_simple(self):
         groupings = self.sample_groupings()
@@ -104,7 +102,7 @@ class TestTypeIsCorrect:
             'group ids were not a contiguous range of integers')
 
     def test_sorting(self):
-        for i in xrange(10):
+        for i in range(10):
             groupings = self.sample_groupings()
             grouping = find_consensus_grouping(groupings, debug=True)
             assert_equal(
@@ -123,14 +121,13 @@ class TestTypeIsCorrect:
 
 class TestValueIsCorrect:
     def __init__(self):
-
         LEVELS = 5
         # LEVELS = 6  # XXX FIXME 6 or more levels fails
 
         self.row_ids = []
         self._grouping = []
         for i in range(0, LEVELS):
-            level = range(2 ** i - 1, 2 ** (i + 1) - 1)
+            level = range(2**i - 1, 2 ** (i + 1) - 1)
             # level = sorted(map(str, level))
             self.row_ids += level
             self._grouping.append(level)
@@ -147,10 +144,7 @@ class TestValueIsCorrect:
 
         grouping.sort(key=(lambda r: r.row_id))
 
-        groups = loom.group.collate(
-            (row.group_id, row.row_id)
-            for row in grouping
-        )
+        groups = loom.group.collate((row.group_id, row.row_id) for row in grouping)
         groups.sort(key=len)
         for group in groups:
             group.sort()
@@ -168,9 +162,7 @@ class TestValueIsCorrect:
         GROUP_COUNT = len(self.grouping)
 
         object_index = {
-            o: g
-            for g, group in enumerate(self.grouping)
-            for o in group
+            o: g for g, group in enumerate(self.grouping) for o in group
         }
 
         # each object is in the wrong place in one grouping

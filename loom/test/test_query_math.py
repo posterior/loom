@@ -38,25 +38,27 @@ from goftests import discrete_goodness_of_fit
 import loom.datasets
 import loom.preql
 import loom.query
-from loom.test.util import for_each_dataset, load_rows
+from loom.test.util import get_test_kwargs, load_rows
+import pytest
 
 
 MIN_GOODNESS_OF_FIT = 1e-4
 SCORE_PLACES = 3
-SCORE_TOLERANCE = 10.0 ** -SCORE_PLACES
+SCORE_TOLERANCE = 10.0**-SCORE_PLACES
 
 SAMPLE_COUNT = 500
 
 # tests are inaccurate with highly imbalanced data
-MIN_CATEGORICAL_PROB = .03
+MIN_CATEGORICAL_PROB = 0.03
 
 SEED = 1234
 
 
-@for_each_dataset
-def test_score_none(root, encoding, **unused):
-    with loom.query.get_server(root, debug=True) as server:
-        preql = loom.preql.PreQL(server, encoding)
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_score_none(dataset):
+    kwargs = get_test_kwargs(dataset)
+    with loom.query.get_server(kwargs['root'], debug=True) as server:
+        preql = loom.preql.PreQL(server, kwargs['encoding'])
         fnames = preql.feature_names
         assert_less(
             abs(server.score([None for _ in fnames])),
@@ -70,7 +72,7 @@ def _check_marginal_samples_match_scores(server, row, fi):
     samples = server.sample(to_sample, row, SAMPLE_COUNT)
     val = samples[0][fi]
     base_score = server.score(row)
-    if isinstance(val, bool) or isinstance(val, (int, long)):
+    if isinstance(val, bool) or isinstance(val, int):
         probs_dict = {}
         samples = [sample[fi] for sample in samples]
         for sample in set(samples):
@@ -93,22 +95,26 @@ def _check_marginal_samples_match_scores(server, row, fi):
     assert_greater(gof, MIN_GOODNESS_OF_FIT)
 
 
-@for_each_dataset
-def test_samples_match_scores(root, rows, **unused):
-    rows = load_rows(rows)
-    rows = rows[::len(rows) / 5]
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_samples_match_scores(dataset):
+    kwargs = get_test_kwargs(dataset)
+    rows = load_rows(kwargs['rows'])
+    rows = rows[:: len(rows) // 5]
     with tempdir():
         loom.config.config_dump({'seed': SEED}, 'config.pb.gz')
-        with loom.query.get_server(root, 'config.pb.gz', debug=True) as server:
+        with loom.query.get_server(kwargs['root'], 'config.pb.gz', debug=True) as server:
             for row in rows:
                 _check_marginal_samples_match_scores(server, row, 0)
 
 
-@for_each_dataset
-def test_entropy(root, ingest, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_entropy(dataset):
     sample_count = 1000
-    with loom.query.get_server(root) as server:
-        rows = load_rows(ingest['rows'])
+    kwargs = get_test_kwargs(dataset)
+    root = kwargs['root']
+    paths = loom.store.get_paths(root)
+    with loom.query.get_server(paths['root']) as server:
+        rows = load_rows(paths['ingest']['rows'])
         rows = rows[:4]
         rows = [loom.query.protobuf_to_data_row(row.diff) for row in rows]
         rows = [[None] * len(rows[0])] + rows
@@ -133,7 +139,7 @@ def test_entropy(root, ingest, **unused):
 
 
 def assert_estimate_close(actual, expected):
-    print actual.mean, expected.mean, actual.variance, expected.variance
+    print(actual.mean, expected.mean, actual.variance, expected.variance)
     sigma = (actual.variance + expected.variance) ** 0.5
     assert_less_equal(abs(actual.mean - expected.mean), 4.0 * sigma)
     assert_less(abs(log(actual.variance / expected.variance)), 1.0)

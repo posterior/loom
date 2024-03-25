@@ -47,8 +47,8 @@ def protobuf_stream_watch(filename):
 
 
 def print_page(message):
-    print '--------------------------------'
-    print message,
+    print('--------------------------------')
+    print(message)
 
 
 def print_line(message):
@@ -119,7 +119,7 @@ def brief(log_file, delay_sec=3.0):
     '''
     Print brief log messages as they are written.
     '''
-    print 'iter\tassigned_object_count'
+    print('iter\tassigned_object_count')
     message = LogMessage()
     for string in protobuf_stream_watch(log_file):
         message.ParseFromString(string)

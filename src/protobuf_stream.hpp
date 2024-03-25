@@ -265,7 +265,7 @@ public:
     {
         google::protobuf::io::CodedOutputStream coded(stream_);
         LOOM_ASSERT1(message.IsInitialized(), "message not initialized");
-        uint32_t message_size = message.ByteSize();
+        size_t message_size = message.ByteSizeLong();
         coded.WriteLittleEndian32(message_size);
         message.SerializeWithCachedSizes(& coded);
     }

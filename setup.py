@@ -107,7 +107,7 @@ config = {
         'loom',
         'loom.test',
     ],
-    'ext_modules': cythonize(ext_modules),
+    'ext_modules': cythonize(ext_modules, compiler_directives={"language_level": "3"}),
     'entry_points': parsable.find_entry_points('loom'),
 }
 

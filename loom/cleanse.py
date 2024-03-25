@@ -37,13 +37,13 @@ DEFAULT_PART_COUNT = 100
 re_nonascii = re.compile('[^\x00-\x7f]+')
 
 
-def force_ascii(filename_in, filename_out=None, size=4096):
+def force_ascii(filename_in, filename_out, size=4096):
     with ExitStack() as stack:
         with_ = stack.enter_context
         if filename_out is None:
             filename_out = with_(loom.util.temp_copy(filename_in))
-        source = with_(open_compressed(filename_in, 'rb'))
-        destin = with_(open_compressed(filename_out, 'w'))
+        source = with_(open_compressed(filename_in, 'rt'))
+        destin = with_(open_compressed(filename_out, 'wt'))
         chunk = source.read(size)
         while chunk:
             destin.write(re_nonascii.sub('', chunk))
@@ -55,18 +55,18 @@ def repartition_csv_files(infiles, outfiles):
         with_ = stack.enter_context
         readers = [with_(loom.util.csv_reader(f)) for f in infiles]
         writers = [with_(loom.util.csv_writer(f)) for f in outfiles]
-        headers = [reader.next() for reader in readers]
+        headers = [next(reader) for reader in readers]
         header = headers[0]
         assert all(h == header for h in headers), 'headers to not match'
         for writer in writers:
             writer.writerow(header)
         len_header = len(header)
-        get_writer = itertools.cycle(writers).next
+        writer_cycle = itertools.cycle(writers)
         for reader in readers:
             for row in reader:
                 if row:
                     assert len(row) == len_header, row
-                    get_writer().writerow(row)
+                    next(writer_cycle).writerow(row)
 
 
 def repartition_csv_dir(dirname, part_count=DEFAULT_PART_COUNT):
@@ -80,7 +80,7 @@ def repartition_csv_dir(dirname, part_count=DEFAULT_PART_COUNT):
     with loom.util.temp_copy(dirname) as temp:
         loom.util.mkdir_p(temp)
         outfile = os.path.join(temp, '.'.join(parts)).format
-        outfiles = [outfile(i) for i in xrange(part_count)]
+        outfiles = [outfile(i) for i in range(part_count)]
         infiles = [os.path.join(dirname, f) for f in os.listdir(dirname)]
         repartition_csv_files(infiles, outfiles)
         loom.util.rm_rf(dirname)  # HACK not atomic

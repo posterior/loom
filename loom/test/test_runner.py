@@ -31,7 +31,7 @@ from nose.tools import assert_equal
 from nose.tools import assert_true
 from loom.test.util import assert_found
 from loom.test.util import CLEANUP_ON_ERROR
-from loom.test.util import for_each_dataset
+from loom.test.util import get_test_kwargs
 from distributions.fileutil import tempdir
 from distributions.io.stream import open_compressed
 from distributions.io.stream import protobuf_stream_load
@@ -39,6 +39,7 @@ from loom.schema_pb2 import CrossCat
 from loom.schema_pb2 import ProductModel
 import loom.config
 import loom.runner
+import pytest
 
 CONFIGS = [
     {
@@ -156,53 +157,57 @@ def get_group_counts(groups_out):
     return group_counts
 
 
-@for_each_dataset
-def test_tare(rows, schema_row, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_tare(dataset):
+    kwargs = get_test_kwargs(dataset)
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
         tares = os.path.abspath('tares.pbs.gz')
         loom.runner.tare(
-            schema_row_in=schema_row,
-            rows_in=rows,
+            schema_row_in=kwargs['schema_row'],
+            rows_in=kwargs['rows'],
             tares_out=tares)
         assert_found(tares)
 
 
-@for_each_dataset
-def test_sparsify(rows, schema_row, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_sparsify(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
         tares = os.path.abspath('tares.pbs.gz')
         diffs = os.path.abspath('diffs.pbs.gz')
+        kwargs = get_test_kwargs(dataset)
         loom.runner.tare(
-            schema_row_in=schema_row,
-            rows_in=rows,
+            schema_row_in=kwargs['schema_row'],
+            rows_in=kwargs['rows'],
             tares_out=tares)
         assert_found(tares)
         loom.runner.sparsify(
-            schema_row_in=schema_row,
+            schema_row_in=kwargs['schema_row'],
             tares_in=tares,
-            rows_in=rows,
+            rows_in=kwargs['rows'],
             rows_out=diffs,
             debug=True)
         assert_found(diffs)
 
 
-@for_each_dataset
-def test_shuffle(diffs, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_shuffle(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+        kwargs = get_test_kwargs(dataset)
         seed = 12345
         rows_out = os.path.abspath('shuffled.pbs.gz')
-        loom.runner.shuffle(
-            rows_in=diffs,
-            rows_out=rows_out,
-            seed=seed)
+        loom.runner.shuffle(rows_in=kwargs['diffs'], rows_out=rows_out, seed=seed)
         assert_found(rows_out)
 
 
-@for_each_dataset
-def test_infer(name, tares, shuffled, init, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_infer(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+        kwargs = get_test_kwargs(dataset)
+        shuffled = kwargs['shuffled']
+        tares = kwargs['tares']
+        init = kwargs['init']
         row_count = sum(1 for _ in protobuf_stream_load(shuffled))
-        with open_compressed(init) as f:
+        with open_compressed(init, 'rb') as f:
             message = CrossCat()
             message.ParseFromString(f.read())
         kind_count = len(message.kinds)
@@ -210,9 +215,9 @@ def test_infer(name, tares, shuffled, init, **unused):
         for config in CONFIGS:
             loom.config.fill_in_defaults(config)
             schedule = config['schedule']
-            print 'config: {}'.format(config)
+            print('config: {}'.format(config))
 
-            greedy = (schedule['extra_passes'] == 0)
+            greedy = schedule['extra_passes'] == 0
             kind_iters = config['kernels']['kind']['iterations']
             kind_structure_is_fixed = greedy or kind_iters == 0
 
@@ -243,17 +248,21 @@ def test_infer(name, tares, shuffled, init, **unused):
                 assign_count = sum(1 for _ in protobuf_stream_load(assign_out))
                 assert_equal(assign_count, row_count)
 
-            print 'row_count: {}'.format(row_count)
-            print 'group_counts: {}'.format(' '.join(map(str, group_counts)))
+            print('row_count: {}'.format(row_count))
+            print('group_counts: {}'.format(' '.join(map(str, group_counts))))
             for group_count in group_counts:
                 assert_true(
                     group_count <= row_count,
                     'groups are all singletons')
 
 
-@for_each_dataset
-def test_posterior_enum(name, tares, diffs, init, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_posterior_enum(dataset):
     with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+        kwargs = get_test_kwargs(dataset)
+        init = kwargs['init']
+        tares = kwargs['tares']
+        diffs = kwargs['diffs']
         config_in = os.path.abspath('config.pb.gz')
         config = {
             'posterior_enum': {
@@ -282,11 +291,13 @@ def test_posterior_enum(name, tares, diffs, init, **unused):
         assert_equal(actual_count, config['posterior_enum']['sample_count'])
 
 
-@for_each_dataset
-def test_generate(model, **unused):
+@pytest.mark.parametrize('dataset', loom.datasets.TEST_CONFIGS)
+def test_generate(dataset):
     for row_count in [0, 1, 100]:
         for density in [0.0, 0.5, 1.0]:
             with tempdir(cleanup_on_error=CLEANUP_ON_ERROR):
+                kwargs = get_test_kwargs(dataset)
+                model = kwargs['model']
                 config_in = os.path.abspath('config.pb.gz')
                 config = {
                     'generate': {
@@ -310,5 +321,4 @@ def test_generate(model, **unused):
                 assert_found(rows_out, model_out, groups_out)
 
                 group_counts = get_group_counts(groups_out)
-                print 'group_counts: {}'.format(
-                    ' '.join(map(str, group_counts)))
+                print('group_counts: {}'.format(' '.join(map(str, group_counts))))

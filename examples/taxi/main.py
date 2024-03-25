@@ -28,7 +28,6 @@
 
 import os
 import re
-from itertools import izip
 import parsable
 from loom.util import mkdir_p, rm_rf, parallel_map
 import loom.datasets
@@ -47,14 +46,14 @@ def s3_split(url):
     return bucket, path
 
 
-def s3_get((bucket, source, destin)):
+def s3_get(bucket, source, destin):
     import boto
     try:
-        print 'starting {}'.format(source)
+        print('starting {}'.format(source))
         conn = boto.connect_s3().get_bucket(bucket)
         key = conn.get_key(source)
         key.get_contents_to_filename(destin)
-        print 'finished {}'.format(source)
+        print('finished {}'.format(source))
     except:
         rm_rf(destin)
         raise
@@ -77,14 +76,14 @@ def download(s3_url=S3_URL):
     files = [os.path.join(ROWS_CSV, os.path.basename(key)) for key in keys]
     tasks = [
         (bucket, source, destin)
-        for source, destin in izip(keys, files)
+        for source, destin in zip(keys, files)
         if not os.path.exists(destin)
     ]
     if tasks:
-        print 'starting download of {} files'.format(len(tasks))
+        print('starting download of {} files'.format(len(tasks)))
         mkdir_p(ROWS_CSV)
         parallel_map(s3_get, tasks)
-        print 'finished download of {} files'.format(len(keys))
+        print('finished download of {} files'.format(len(keys)))
 
 
 @parsable.command
@@ -108,7 +107,7 @@ def test():
     loom.tasks.ingest(name, SCHEMA, EXAMPLE, debug=True)
     loom.tasks.infer(name, sample_count=2, config=config, debug=True)
     with loom.tasks.query(name) as server:
-        print server.relate(['fare_amount'])
+        print(server.relate(['fare_amount']))
 
 
 if __name__ == '__main__':

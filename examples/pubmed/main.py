@@ -29,7 +29,7 @@
 import os
 import sys
 import csv
-import urllib
+import urllib.request
 import parsable
 from distributions.io.stream import (
     open_compressed,
@@ -74,16 +74,16 @@ def download():
     if not os.path.exists(DATA):
         os.makedirs(DATA)
     if not os.path.exists(RAW):
-        print 'fetching {}'.format(DATA_URL)
-        urllib.urlretrieve(DATA_URL, RAW)
+        print('fetching {}'.format(DATA_URL))
+        urllib.request.urlretrieve(DATA_URL, RAW)
     if not os.path.exists(VOCAB):
-        print 'fetching {}'.format(VOCAB_URL)
-        urllib.urlretrieve(VOCAB_URL, VOCAB)
+        print('fetching {}'.format(VOCAB_URL))
+        urllib.request.urlretrieve(VOCAB_URL, VOCAB)
 
 
 def import_schema():
     schema = [line.strip() for line in open_compressed(VOCAB)]
-    with open_compressed(SCHEMA_CSV, 'w') as outfile:
+    with open_compressed(SCHEMA_CSV, 'wt') as outfile:
         writer = csv.writer(outfile)
         writer.writerow(schema)
     return schema
@@ -103,13 +103,13 @@ def import_rows():
     pos.observed.sparsity = ProductValue.Observed.SPARSE
     neg.observed.sparsity = ProductValue.Observed.SPARSE
     with open_compressed(RAW) as infile:
-        doc_count = int(infile.next())
-        word_count = int(infile.next())
-        observed_count = int(infile.next())
-        print 'Importing {} observations of {} words in {} documents'.format(
+        doc_count = int(next(infile))
+        word_count = int(next(infile))
+        observed_count = int(next(infile))
+        print('Importing {} observations of {} words in {} documents'.format(
             observed_count,
             word_count,
-            doc_count)
+            doc_count))
         with open_compressed(DIFFS, 'wb') as outfile:
             current_doc = None
             for line in infile:

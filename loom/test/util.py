@@ -44,29 +44,22 @@ def assert_found(*filenames):
         assert_true(os.path.exists(name), 'missing file: {}'.format(name))
 
 
-def for_each_dataset(fun):
-    @functools.wraps(fun)
-    def test_one(dataset):
-        paths = loom.store.get_paths(dataset, sample_count=2)
-        for key, path in loom.store.iter_paths(dataset, paths):
-            if not os.path.exists(path):
-                raise ValueError(
-                    'missing {} at {},\n  first `python -m loom.datasets test`'
-                    .format(key, path))
-        kwargs = {'name': dataset}
-        kwargs.update(paths['query'])
-        kwargs.update(paths['consensus'])
-        kwargs.update(paths['samples'][0])
-        kwargs.update(paths['ingest'])
-        kwargs.update(paths)
-        fun(**kwargs)
-
-    @functools.wraps(fun)
-    def test_all():
-        for dataset in loom.datasets.TEST_CONFIGS:
-            yield test_one, dataset
-
-    return test_all
+def get_test_kwargs(dataset):
+    paths = loom.store.get_paths(dataset, sample_count=2)
+    for key, path in loom.store.iter_paths(dataset, paths):
+      if not os.path.exists(path):
+        raise ValueError(
+            'missing {} at {},\n  first `python -m loom.datasets test`'.format(
+                key, path
+            )
+        )
+    kwargs = {'name': dataset}
+    kwargs.update(paths['query'])
+    kwargs.update(paths['consensus'])
+    kwargs.update(paths['samples'][0])
+    kwargs.update(paths['ingest'])
+    kwargs.update(paths)
+    return kwargs
 
 
 def load_rows(filename):
@@ -88,7 +81,7 @@ def load_rows_csv(dirname):
     for filename in filenames:
         filename = os.path.join(dirname, filename)
         with csv_reader(filename) as reader:
-            header = reader.next()
+            header = next(reader)
             rows += reader
     rows[0] = header
     return rows
