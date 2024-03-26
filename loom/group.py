@@ -151,7 +151,7 @@ def find_consensus_grouping(groupings, debug=False):
 
     adjacency = [[] for _ in vertices]
     for i, j in edges:
-        adjacency[i].append(j)
+        adjacency[i].append(int(j))
 
     # FIXME is there a better way to choose the final group count?
     group_count = int(numpy.median(list(map(len, groupings_list))))
