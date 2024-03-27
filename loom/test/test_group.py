@@ -38,6 +38,8 @@ from nose.tools import assert_almost_equal
 from nose.tools import assert_equal
 from nose.tools import assert_set_equal
 
+ROW_COUNT = 1000
+SAMPLE_COUNT = 10
 
 def test_metis():
 
@@ -69,20 +71,15 @@ def test_metis():
 
 
 class TestTypeIsCorrect:
-    def __init__(self):
-        ROW_COUNT = 1000
-        SAMPLE_COUNT = 10
-
-        self.clustering = distributions.lp.clustering.PitmanYor()
-        self.sample_count = SAMPLE_COUNT
-        self.row_ids = map(str, range(ROW_COUNT))
 
     def sample_grouping(self):
-        assignments = self.clustering.sample_assignments(len(self.row_ids))
-        return loom.group.collate(zip(assignments, self.row_ids))
+        row_ids = list(map(str, range(ROW_COUNT)))
+        clustering = distributions.lp.clustering.PitmanYor()
+        assignments = clustering.sample_assignments(len(row_ids))
+        return loom.group.collate(zip(assignments, row_ids))
 
     def sample_groupings(self):
-        return [self.sample_grouping() for _ in range(self.sample_count)]
+        return [self.sample_grouping() for _ in range(SAMPLE_COUNT)]
 
     def test_simple(self):
         groupings = self.sample_groupings()
@@ -92,13 +89,14 @@ class TestTypeIsCorrect:
             assert isinstance(row, loom.group.Row), row
 
         row_ids = set(row.row_id for row in grouping)
+        expected_row_ids = list(map(str, range(ROW_COUNT)))
         assert len(row_ids) == len(grouping), 'grouping had duplicate rows'
-        assert_set_equal(set(self.row_ids), row_ids)
+        assert_set_equal(set(expected_row_ids), row_ids)
 
         group_ids = sorted(list(set(row.group_id for row in grouping)))
         assert_equal(
             group_ids,
-            range(len(group_ids)),
+            list(range(len(group_ids))),
             'group ids were not a contiguous range of integers')
 
     def test_sorting(self):

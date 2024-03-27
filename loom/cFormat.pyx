@@ -160,7 +160,6 @@ cdef class Row:
         cdef int i
         for i in range(self.ptr.pos().observed().dense_size()):
             yield self.ptr.pos().observed().dense(i)
-        raise StopIteration()
 
     def booleans_size(self):
         return self.ptr.pos().booleans_size()
@@ -175,7 +174,6 @@ cdef class Row:
         cdef int i
         for i in range(self.booleans_size()):
             yield self.booleans(i)
-        raise StopIteration()
 
     def counts_size(self):
         return self.ptr.pos().counts_size()
@@ -190,7 +188,6 @@ cdef class Row:
         cdef int i
         for i in range(self.counts_size()):
             yield self.counts(i)
-        raise StopIteration()
 
     def reals_size(self):
         return self.ptr.pos().reals_size()
@@ -205,7 +202,6 @@ cdef class Row:
         cdef int i
         for i in range(self.reals_size()):
             yield self.reals(i)
-        raise StopIteration()
 
     def dump(self):
         return {
